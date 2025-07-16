@@ -11,5 +11,8 @@ def main():
     conn, addr = server_socket.accept() # wait for client
     conn.sendall(b"+PONG\r\n")
 
+    while conn.recv(1024):
+        conn.sendall(b"+PONG\r\n")
+
 if __name__ == "__main__":
     main()
