@@ -112,7 +112,6 @@ def send_command(client_conn, response):
                 option = response[3].lower()
                 if option == "px" and len(response) > 4:
                     # Store expiration as absolute time in ms
-                    import time
                     expiration_time = int(response[4])
                     expiration_times[key] = time.time() * 1000 + expiration_time
                 elif option == "ex" and len(response) > 4:
@@ -127,7 +126,7 @@ def send_command(client_conn, response):
             resp = format_resp("Error: GET command requires a key")
         else:
             key = response[1]
-            if expiration_times.get(key, 0) < time.time() * 1000:
+            if expiration_times.get(key) and expiration_times.get(key) < time.time() * 1000:
                 # If the key has expired, return -1
                 value = None
             else:
