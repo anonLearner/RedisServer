@@ -1,5 +1,5 @@
 import threading
-
+import time
 import socket  # noqa: F401
 
 
@@ -20,6 +20,7 @@ for arrays, we need to send a response in the format: *<number-of-elements>\r\n<
 """
 
 data_in_memory = {}
+expiration_times = {}
 
 def parse_data(data: str):
     """
@@ -106,7 +107,19 @@ def send_command(client_conn, response):
         else:
             key = response[1]
             value = response[2]
-            # Here you would typically store the key-value pair in a database or dictionary
+            # If there are more than 3 arguments, check for PX/EX
+            if len(response) > 3:
+                option = response[3].lower()
+                if option == "px" and len(response) > 4:
+                    # Store expiration as absolute time in ms
+                    import time
+                    expiration_time = int(response[4])
+                    expiration_times[key] = time.time() * 1000 + expiration_time
+                elif option == "ex" and len(response) > 4:
+                    # seconds are given, convert to ms
+                    expiration_time = int(response[4]) * 1000
+                    expiration_times[key] = time.time() * 1000 + expiration_time
+            # Store the key-value pair
             data_in_memory[key] = value
             resp = format_resp("OK")
     elif command == "get":
@@ -114,7 +127,11 @@ def send_command(client_conn, response):
             resp = format_resp("Error: GET command requires a key")
         else:
             key = response[1]
-            value = data_in_memory.get(key, None)
+            if expiration_times.get(key, 0) < time.time() * 1000:
+                # If the key has expired, return -1
+                value = None
+            else:
+                value = data_in_memory.get(key, None)
             resp = format_resp(value) #format_resp is handling the None case, sending -1
     else:
         resp = format_resp("Error: Unknown command")
