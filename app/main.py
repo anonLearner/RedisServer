@@ -151,7 +151,10 @@ def send_command(client_conn, response):
                     resp = format_resp("OK")
             elif subcommand == "get":
                 param = response[2]
-                resp = format_resp(config[param])
+                if config.get(param):
+                    resp = format_resp([param, config[param]])
+                else:
+                    resp = format_resp(None)
             else:
                 resp = format_resp(f"Error: Unknown CONFIG subcommand '{subcommand}'")
     else:
