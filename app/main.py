@@ -1,6 +1,7 @@
 import threading
 import time
-import socket  # noqa: F401
+import socket
+import argparse
 
 
 """
@@ -21,10 +22,7 @@ for arrays, we need to send a response in the format: *<number-of-elements>\r\n<
 
 data_in_memory = {}
 expiration_times = {}
-config = {
-    "dir": "/tmp/redis-data",
-    "dbfilename": "rdbfile"
-}
+config = {}
 
 def parse_data(data: str):
     """
@@ -176,10 +174,17 @@ def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
     print("Logs from your program will appear here!")
 
-    # Uncomment this to pass the first stage
-    
+    # Parse command-line arguments for --dir and --dbfilename
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dir', type=str, default='/tmp/redis-data')
+    parser.add_argument('--dbfilename', type=str, default='rdbfile')
+    args = parser.parse_args()
+
+    # Store in config dict
+    config['dir'] = args.dir
+    config['dbfilename'] = args.dbfilename
+
     server_socket = socket.create_server(("localhost", 6379), reuse_port=True)
-    
     while True: 
         conn, addr = server_socket.accept()  # wait for client
         print(f"Accepted connection from {addr}")
