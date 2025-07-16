@@ -24,42 +24,83 @@ def parse_data(data: str):
     Parses the incoming data and returns a command.
     The data is expected to be in the format of Redis protocol.
     """
-    if data.startswith('*'):
-        # Array type
-        elements = data[1:].strip().split('\r\n')
-        "but this list also contains different types of elements, so we need to parse them individually"
-        elements = [parse_data(element) for element in elements if element]
-        return elements
-    elif data.startswith('$'):
-        # Bulk string type
-        length = int(data[1:data.index('\r\n')])
-        return data[data.index('\r\n') + 2:data.index('\r\n') + 2 + length]
-    elif data.startswith(':'):
-        # Integer type
-        return int(data[1:].strip())
-    elif data.startswith('+'):
-        # Simple string type
-        return data[1:].strip()
-    elif data.startswith('-'):
-        # Error type
-        return f"Error: {data[1:].strip()}"
-    else:
-        return None
+    def parse_next(data):
+        if not data:
+            return None, ''
+        if data[0] == '*':
+            # Array type
+            crlf = data.find('\r\n')
+            count = int(data[1:crlf])
+            rest = data[crlf+2:]
+            arr = []
+            for _ in range(count):
+                elem, rest = parse_next(rest)
+                arr.append(elem)
+            return arr, rest
+        elif data[0] == '$':
+            crlf = data.find('\r\n')
+            length = int(data[1:crlf])
+            start = crlf+2
+            end = start+length
+            bulk = data[start:end]
+            rest = data[end+2:]  # skip \r\n after bulk string
+            return bulk, rest
+        elif data[0] == ':':
+            crlf = data.find('\r\n')
+            num = int(data[1:crlf])
+            rest = data[crlf+2:]
+            return num, rest
+        elif data[0] == '+':
+            crlf = data.find('\r\n')
+            simple = data[1:crlf]
+            rest = data[crlf+2:]
+            return simple, rest
+        elif data[0] == '-':
+            crlf = data.find('\r\n')
+            err = f"Error: {data[1:crlf]}"
+            rest = data[crlf+2:]
+            return err, rest
+        else:
+            return None, ''
+
+    result, _ = parse_next(data)
+    return result
     
-def send_command(client_conn, response):
-    command = response[0].lower()
-    if command is None:
-        return
-    elif command == "ping":
-        response = "+PONG\r\n"
-    elif command == "quit":
-        response = "+OK\r\n"
-    elif command == "echo":
-        resp_str = response[1]
-        response = f"${len(resp_str)}\r\n{resp_str}\r\n"
+def format_resp(value):
+    if isinstance(value, str):
+        # Bulk string for echo, simple string for OK/PONG
+        if value.startswith("Error: "):
+            return f"-{value[7:]}\r\n"
+        elif value in ("OK", "PONG"):
+            return f"+{value}\r\n"
+        else:
+            return f"${len(value)}\r\n{value}\r\n"
+    elif isinstance(value, int):
+        return f":{value}\r\n"
+    elif isinstance(value, list):
+        resp = f"*{len(value)}\r\n"
+        for item in value:
+            resp += format_resp(item)
+        return resp
+    elif value is None:
+        return "$-1\r\n"  # Null bulk string
     else:
-        response = "-Error: Unknown command\r\n"
-    client_conn.sendall(response)
+        return f"-Error: Unknown type\r\n"
+
+def send_command(client_conn, response):
+    command = response[0].lower() if response and isinstance(response, list) and response[0] else None
+    if command is None:
+        resp = format_resp("Error: Unknown command")
+    elif command == "ping":
+        resp = format_resp("PONG")
+    elif command == "quit":
+        resp = format_resp("OK")
+    elif command == "echo":
+        resp_str = response[1] if len(response) > 1 else ""
+        resp = format_resp(resp_str)
+    else:
+        resp = format_resp("Error: Unknown command")
+    client_conn.sendall(resp.encode('utf-8'))
 
 def handle_client(client_conn):
     while True:
