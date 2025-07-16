@@ -21,6 +21,10 @@ for arrays, we need to send a response in the format: *<number-of-elements>\r\n<
 
 data_in_memory = {}
 expiration_times = {}
+config = {
+    "dir": "/tmp/redis-data",
+    "dbfilename": "rdbfile"
+}
 
 def parse_data(data: str):
     """
@@ -132,6 +136,24 @@ def send_command(client_conn, response):
             else:
                 value = data_in_memory.get(key, None)
             resp = format_resp(value) #format_resp is handling the None case, sending -1
+    elif command == "config":
+        if len(response) < 3:
+            resp = format_resp("Error: CONFIG command requires a subcommand and an argument")
+        else:
+            subcommand = response[1].lower()
+            if subcommand == "set":
+                if len(response) < 4:
+                    resp = format_resp("Error: CONFIG SET command requires a parameter and a value")
+                else:
+                    param = response[2]
+                    value = response[3]
+                    config[param] = value
+                    resp = format_resp("OK")
+            elif subcommand == "get":
+                param = response[2]
+                resp = format_resp(config[param])
+            else:
+                resp = format_resp(f"Error: Unknown CONFIG subcommand '{subcommand}'")
     else:
         resp = format_resp("Error: Unknown command")
     client_conn.sendall(resp.encode('utf-8'))
