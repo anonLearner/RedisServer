@@ -19,6 +19,8 @@ for arrays, we need to send a response in the format: *<number-of-elements>\r\n<
 
 """
 
+data_in_memory = {}
+
 def parse_data(data: str):
     """
     Parses the incoming data and returns a command.
@@ -98,6 +100,22 @@ def send_command(client_conn, response):
     elif command == "echo":
         resp_str = response[1] if len(response) > 1 else ""
         resp = format_resp(resp_str)
+    elif command == "set":
+        if len(response) < 3:
+            resp = format_resp("Error: SET command requires a key and a value")
+        else:
+            key = response[1]
+            value = response[2]
+            # Here you would typically store the key-value pair in a database or dictionary
+            data_in_memory[key] = value
+            resp = format_resp("OK")
+    elif command == "get":
+        if len(response) < 2:
+            resp = format_resp("Error: GET command requires a key")
+        else:
+            key = response[1]
+            value = data_in_memory.get(key, None)
+            resp = format_resp(value) #format_resp is handling the None case, sending -1
     else:
         resp = format_resp("Error: Unknown command")
     client_conn.sendall(resp.encode('utf-8'))
