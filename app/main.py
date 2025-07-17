@@ -266,7 +266,7 @@ def main():
         send_to_master_node(master_socket, ["PING"], "PONG")
         send_to_master_node(master_socket, ['REPLCONF', 'listening-port', str(config['port'])], "OK")
         send_to_master_node(master_socket, ['REPLCONF', 'capa', 'psync2'], "OK")
-        send_to_master_node(master_socket, ['PSYNC',' ?', '-1'], "FULLRESYNC")
+        send_to_master_node(master_socket, ['PSYNC','?', '-1'], "FULLRESYNC")
 
 
     if args.dir and args.dbfilename:
