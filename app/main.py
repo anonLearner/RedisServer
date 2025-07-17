@@ -109,12 +109,12 @@ def read_keys_from_rdb_file():
             expiry_keys = struct.unpack('<B', next_bytes)[0]
 
             for _ in range(total_keys):
+                expiry_time = None
                 expiry_flag = f.read(1)
                 if expiry_flag == b"\xfc":
-                    milliTime = int.from_bytes(f.read(8), byteorder="little")
+                    expiry_time = int.from_bytes(f.read(8), byteorder="little")
                 elif expiry_flag == b"\xfd":
-                    secTime = int.from_bytes(f.read(4), byteorder="little")
-                    milliTime = secTime * 1000
+                    expiry_time = int.from_bytes(f.read(4), byteorder="little") * 1000
                 else:
                     # No expiry, rewind one byte
                     f.seek(-1, 1)
@@ -127,7 +127,8 @@ def read_keys_from_rdb_file():
                 value = f.read(val_len).decode('utf-8')
 
                 data_in_memory[key_name] = value
-                expiration_times[key_name] = milliTime
+                if expiry_time is not None:
+                    expiration_times[key_name] = expiry_time
 
 
     except FileNotFoundError:
@@ -172,12 +173,12 @@ def send_command(client_conn, response):
         else:
             read_keys_from_rdb_file()
             key = response[1]
-            if expiration_times.get(key) and expiration_times.get(key) < time.time() * 1000:
-                # If the key has expired, return -1
+            expiry = expiration_times.get(key)
+            if expiry is not None and int(time.time() * 1000) > expiry:
                 value = None
             else:
                 value = data_in_memory.get(key, None)
-            resp = format_resp(value) #format_resp is handling the None case, sending -1
+            resp = format_resp(value)
     elif command == "config":
         if len(response) < 3:
             resp = format_resp("Error: CONFIG command requires a subcommand and an argument")
