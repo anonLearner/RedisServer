@@ -109,6 +109,15 @@ def read_keys_from_rdb_file():
             expiry_keys = struct.unpack('<B', next_bytes)[0]
 
             for _ in range(total_keys):
+
+                value_type = f.read(1)
+                # Read key name
+                key_len = struct.unpack('<B', f.read(1))[0]
+                key_name = f.read(key_len).decode('utf-8')
+                # Read value
+                val_len = struct.unpack('<B', f.read(1))[0]
+                value = f.read(val_len).decode('utf-8')
+                
                 expiry_flag = f.read(1)
                 if expiry_flag == b"\xfc":
                     milliTime = int.from_bytes(f.read(8), byteorder="little")
@@ -118,13 +127,7 @@ def read_keys_from_rdb_file():
                 else:
                     # No expiry, rewind one byte
                     f.seek(-1, 1)
-                value_type = f.read(1)
-                # Read key name
-                key_len = struct.unpack('<B', f.read(1))[0]
-                key_name = f.read(key_len).decode('utf-8')
-                # Read value
-                val_len = struct.unpack('<B', f.read(1))[0]
-                value = f.read(val_len).decode('utf-8')
+                
 
                 data_in_memory[key_name] = value
                 expiration_times[key_name] = time.time() * 1000 + milliTime
