@@ -109,18 +109,12 @@ def read_keys_from_rdb_file():
             expiry_keys = struct.unpack('<B', next_bytes)[0]
 
             for _ in range(total_keys):
-                expired = False
                 expiry_flag = f.read(1)
                 if expiry_flag == b"\xfc":
                     milliTime = int.from_bytes(f.read(8), byteorder="little")
-                    now = time.time() * 1000
-                    if milliTime < now:
-                        expired = True
                 elif expiry_flag == b"\xfd":
                     secTime = int.from_bytes(f.read(4), byteorder="little")
-                    now = int(time.time())
-                    if secTime < now:
-                        expired = True
+                    milliTime = secTime * 1000
                 else:
                     # No expiry, rewind one byte
                     f.seek(-1, 1)
@@ -133,6 +127,8 @@ def read_keys_from_rdb_file():
                 value = f.read(val_len).decode('utf-8')
 
                 data_in_memory[key_name] = value
+                expiration_times[key_name] = milliTime
+
 
     except FileNotFoundError:
         return None  # Return empty list if file does not exist
