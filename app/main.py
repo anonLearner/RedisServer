@@ -127,7 +127,7 @@ def read_keys_from_rdb_file():
                 value = f.read(val_len).decode('utf-8')
 
                 data_in_memory[key_name] = value
-                expiration_times[key_name] = time.time() * 1000 + milliTime
+                expiration_times[key_name] = milliTime
 
 
     except FileNotFoundError:
