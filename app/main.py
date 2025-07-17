@@ -238,6 +238,9 @@ def main():
     config['dir'] = args.dir
     config['dbfilename'] = args.dbfilename
 
+    if args.dir and args.dbfilename:
+        read_keys_from_rdb_file()
+
     server_socket = socket.create_server(("localhost", 6379), reuse_port=True)
     while True: 
         conn, addr = server_socket.accept()  # wait for client
