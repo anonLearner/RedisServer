@@ -218,6 +218,7 @@ def send_command(client_conn, response):
                     replica_info = f"role:slave"
                 else:
                     replica_info = "role:master"
+                replica_info += f"\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\nmaster_repl_offset:0"
                 resp = format_resp(replica_info)
 
     else:
