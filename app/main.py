@@ -264,7 +264,7 @@ def main():
         config['replicaof'] = args.replicaof.split()
         master_socket = socket.create_connection((config['replicaof'][0], int(config['replicaof'][1])))
         send_to_master_node(master_socket, ["PING"], "PONG")
-        send_to_master_node(master_socket, ['REPLCONF', 'listening-port', config['port']], "OK")
+        send_to_master_node(master_socket, ['REPLCONF', 'listening-port', str(config['port'])], "OK")
         send_to_master_node(master_socket, ['REPLCONF', 'capa', 'psync2'], "OK")
 
 
