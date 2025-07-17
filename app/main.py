@@ -132,9 +132,7 @@ def read_keys_from_rdb_file():
                 val_len = struct.unpack('<B', f.read(1))[0]
                 value = f.read(val_len).decode('utf-8')
 
-                keys_from_file.append(key_name)
-
-        return keys_from_file
+                data_in_memory[key_name] = value
 
     except FileNotFoundError:
         return None  # Return empty list if file does not exist
@@ -209,9 +207,9 @@ def send_command(client_conn, response):
             resp = format_resp("Error: KEYS command requires a pattern")
         else:
             pattern = response[1]
-            keys = read_keys_from_rdb_file()
-            if pattern != "*":
-                keys = None
+            keys = None
+            if pattern == "*":
+                keys = list(data_in_memory.keys())
             resp = format_resp(keys)
     else:
         resp = format_resp("Error: Unknown command")
@@ -241,6 +239,9 @@ def main():
     # Store in config dict
     config['dir'] = args.dir
     config['dbfilename'] = args.dbfilename
+    
+    if args.dir and args.dbfilename:
+        read_keys_from_rdb_file()
 
     server_socket = socket.create_server(("localhost", 6379), reuse_port=True)
     while True: 
