@@ -255,14 +255,18 @@ def main():
     if args.replicaof is None:
         config['replicaof'] = None
     else:
+        def send_to_master_node(conn, data, wait_for_cmd='OK'):
+            conn.send(format_resp(data).encode('utf-8'))
+            response = conn.recv(1024).decode('utf-8')
+            if parse_data(response) != wait_for_cmd:
+                raise Exception(f"Expected response '{wait_for_cmd}', but got '{response}'")
+            
         config['replicaof'] = args.replicaof.split()
         master_socket = socket.create_connection((config['replicaof'][0], int(config['replicaof'][1])))
-        master_socket.send(format_resp(["PING"]).encode('utf-8'))
-        master_socket.send(format_resp(['REPLCONF', 'listening-port', config['port']]).encode('utf-8'))
-        master_socket.send(format_resp(['REPLCONF', 'capa', 'psync2']).encode('utf-8'))
-        # master_socket.recv(1024)
-        
-        
+        send_to_master_node(master_socket, ["PING"], "PONG")
+        send_to_master_node(master_socket, ['REPLCONF', 'listening-port', config['port']], "OK")
+        send_to_master_node(master_socket, ['REPLCONF', 'capa', 'psync2'], "OK")
+
 
     if args.dir and args.dbfilename:
         read_keys_from_rdb_file()
