@@ -257,9 +257,9 @@ def main():
     else:
         config['replicaof'] = args.replicaof.split()
         master_socket = socket.create_connection((config['replicaof'][0], int(config['replicaof'][1])))
-        master_socket.sendall(format_resp(["PING"]).encode('utf-8'))
-        master_socket.sendall(format_resp(['REPLCONF', 'listening-port', config['port']]).encode('utf-8'))
-        master_socket.sendall(format_resp(['REPLCONF', 'capa', 'psync2']).encode('utf-8'))
+        master_socket.send(format_resp(["PING"]).encode('utf-8'))
+        master_socket.send(format_resp(['REPLCONF', 'listening-port', config['port']]).encode('utf-8'))
+        master_socket.send(format_resp(['REPLCONF', 'capa', 'psync2']).encode('utf-8'))
         # master_socket.recv(1024)
         
         
