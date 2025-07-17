@@ -228,20 +228,22 @@ def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
     print("Logs from your program will appear here!")
 
-    # Parse command-line arguments for --dir and --dbfilename
+    # Parse command-line arguments for --dir, --dbfilename and --port
     parser = argparse.ArgumentParser()
     parser.add_argument('--dir', type=str, default='/tmp/redis-data')
     parser.add_argument('--dbfilename', type=str, default='rdbfile')
+    parser.add_argument('--port', type=int, default='6379')
     args = parser.parse_args()
 
     # Store in config dict
     config['dir'] = args.dir
     config['dbfilename'] = args.dbfilename
+    config['port'] = args.port
 
     if args.dir and args.dbfilename:
         read_keys_from_rdb_file()
 
-    server_socket = socket.create_server(("localhost", 6379), reuse_port=True)
+    server_socket = socket.create_server(("localhost", config['port']), reuse_port=True)
     while True: 
         conn, addr = server_socket.accept()  # wait for client
         print(f"Accepted connection from {addr}")
