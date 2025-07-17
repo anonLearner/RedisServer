@@ -255,7 +255,7 @@ def main():
     config['replicaof'] = args.replicaof.split()
 
     master_socket = socket.create_connection((config['replicaof'][0], int(config['replicaof'][1])))
-    master_socket.sendall(format_resp(["PING"]))
+    master_socket.sendall(format_resp(["PING"]).encode('utf-8'))
     if args.dir and args.dbfilename:
         read_keys_from_rdb_file()
 
