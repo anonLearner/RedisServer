@@ -254,6 +254,8 @@ def main():
     config['port'] = args.port
     config['replicaof'] = args.replicaof
 
+    master_socket = socket.create_connection((args.replicaof.split(':')[0], int(args.replicaof.split(':')[1]))) 
+    master_socket.sendall(format_resp(["PING"]))
     if args.dir and args.dbfilename:
         read_keys_from_rdb_file()
 
