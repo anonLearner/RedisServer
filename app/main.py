@@ -171,7 +171,7 @@ def send_command(client_conn, response):
         if len(response) < 2:
             resp = format_resp("Error: GET command requires a key")
         else:
-            read_keys_from_rdb_file()
+            # read_keys_from_rdb_file()
             key = response[1]
             expiry = expiration_times.get(key)
             if expiry is not None and int(time.time() * 1000) > expiry:
