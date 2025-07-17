@@ -109,15 +109,6 @@ def read_keys_from_rdb_file():
             expiry_keys = struct.unpack('<B', next_bytes)[0]
 
             for _ in range(total_keys):
-
-                value_type = f.read(1)
-                # Read key name
-                key_len = struct.unpack('<B', f.read(1))[0]
-                key_name = f.read(key_len).decode('utf-8')
-                # Read value
-                val_len = struct.unpack('<B', f.read(1))[0]
-                value = f.read(val_len).decode('utf-8')
-                
                 expiry_flag = f.read(1)
                 if expiry_flag == b"\xfc":
                     milliTime = int.from_bytes(f.read(8), byteorder="little")
@@ -127,7 +118,13 @@ def read_keys_from_rdb_file():
                 else:
                     # No expiry, rewind one byte
                     f.seek(-1, 1)
-                
+                value_type = f.read(1)
+                # Read key name
+                key_len = struct.unpack('<B', f.read(1))[0]
+                key_name = f.read(key_len).decode('utf-8')
+                # Read value
+                val_len = struct.unpack('<B', f.read(1))[0]
+                value = f.read(val_len).decode('utf-8')
 
                 data_in_memory[key_name] = value
                 expiration_times[key_name] = time.time() * 1000 + milliTime
@@ -173,6 +170,7 @@ def send_command(client_conn, response):
         if len(response) < 2:
             resp = format_resp("Error: GET command requires a key")
         else:
+            read_keys_from_rdb_file()
             key = response[1]
             if expiration_times.get(key) and expiration_times.get(key) < time.time() * 1000:
                 # If the key has expired, return -1
@@ -238,9 +236,6 @@ def main():
     # Store in config dict
     config['dir'] = args.dir
     config['dbfilename'] = args.dbfilename
-    
-    if args.dir and args.dbfilename:
-        read_keys_from_rdb_file()
 
     server_socket = socket.create_server(("localhost", 6379), reuse_port=True)
     while True: 
