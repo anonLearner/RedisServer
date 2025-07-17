@@ -91,6 +91,55 @@ def format_resp(value):
         return "$-1\r\n"  # Null bulk string
     else:
         return f"-Error: Unknown type\r\n"
+    
+def read_keys_from_rdb_file():
+    rdb_file_loc = config['dir'] + '/' + config['dbfilename']
+    keys_from_file = []
+    try:
+        with open(rdb_file_loc, 'rb') as f:
+            # Read bytes until b'\xfb' is found
+            while True:
+                byte = f.read(1)
+                if byte == b'\xfb':
+                    break
+            import struct
+            next_bytes = f.read(1)
+            total_keys = struct.unpack('<B', next_bytes)[0]
+            next_bytes = f.read(1)
+            expiry_keys = struct.unpack('<B', next_bytes)[0]
+
+            for _ in range(total_keys):
+                expired = False
+                expiry_flag = f.read(1)
+                if expiry_flag == b"\xfc":
+                    milliTime = int.from_bytes(f.read(8), byteorder="little")
+                    now = time.time() * 1000
+                    if milliTime < now:
+                        expired = True
+                elif expiry_flag == b"\xfd":
+                    secTime = int.from_bytes(f.read(4), byteorder="little")
+                    now = int(time.time())
+                    if secTime < now:
+                        expired = True
+                else:
+                    # No expiry, rewind one byte
+                    f.seek(-1, 1)
+                value_type = f.read(1)
+                # Read key name
+                key_len = struct.unpack('<B', f.read(1))[0]
+                key_name = f.read(key_len).decode('utf-8')
+                # Read value
+                val_len = struct.unpack('<B', f.read(1))[0]
+                value = f.read(val_len).decode('utf-8')
+
+                keys_from_file.append(key_name)
+
+        return keys_from_file
+
+    except FileNotFoundError:
+        return None  # Return empty list if file does not exist
+    except Exception as e:
+        return [f"Error reading RDB file: {str(e)}"]       
 
 def send_command(client_conn, response):
     command = response[0].lower() if response and isinstance(response, list) and response[0] else None
@@ -155,6 +204,15 @@ def send_command(client_conn, response):
                     resp = format_resp(None)
             else:
                 resp = format_resp(f"Error: Unknown CONFIG subcommand '{subcommand}'")
+    elif command == "keys":
+        if len(response) < 2:
+            resp = format_resp("Error: KEYS command requires a pattern")
+        else:
+            pattern = response[1]
+            keys = read_keys_from_rdb_file()
+            if pattern != "*":
+                keys = None
+            resp = format_resp(keys)
     else:
         resp = format_resp("Error: Unknown command")
     client_conn.sendall(resp.encode('utf-8'))
