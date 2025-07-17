@@ -258,7 +258,7 @@ def main():
         def send_to_master_node(conn, data, wait_for_cmd='OK'):
             conn.send(format_resp(data).encode('utf-8'))
             response = conn.recv(1024).decode('utf-8')
-            if parse_data(response) != wait_for_cmd:
+            if wait_for_cmd not in parse_data(response):
                 raise Exception(f"Expected response '{wait_for_cmd}', but got '{response}'")
             
         config['replicaof'] = args.replicaof.split()
@@ -266,6 +266,7 @@ def main():
         send_to_master_node(master_socket, ["PING"], "PONG")
         send_to_master_node(master_socket, ['REPLCONF', 'listening-port', str(config['port'])], "OK")
         send_to_master_node(master_socket, ['REPLCONF', 'capa', 'psync2'], "OK")
+        send_to_master_node(master_socket, ['REPLCONF', 'PSYNC',' ?', '-1'], "FULLRESYNC")
 
 
     if args.dir and args.dbfilename:
