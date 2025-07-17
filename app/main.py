@@ -214,7 +214,12 @@ def send_command(client_conn, response):
         else:
             argument = response[1]
             if argument == "replication":
-                resp = format_resp("role:master")
+                if config.get('replicaof'):
+                    replica_info = f"role:slave"
+                else:
+                    replica_info = "role:master"
+                resp = format_resp(replica_info)
+
     else:
         resp = format_resp("Error: Unknown command")
     client_conn.sendall(resp.encode('utf-8'))
@@ -239,12 +244,14 @@ def main():
     parser.add_argument('--dir', type=str, default='/tmp/redis-data')
     parser.add_argument('--dbfilename', type=str, default='rdbfile')
     parser.add_argument('--port', type=int, default='6379')
+    parser.add_argument('--replicaof', type=str, default=None, help='IP addr and port of the replica server')
     args = parser.parse_args()
 
     # Store in config dict
     config['dir'] = args.dir
     config['dbfilename'] = args.dbfilename
     config['port'] = args.port
+    config['replicaof'] = args.replicaof
 
     if args.dir and args.dbfilename:
         read_keys_from_rdb_file()
