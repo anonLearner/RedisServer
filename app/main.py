@@ -294,13 +294,18 @@ def handle_client(client_conn, replica=False):
         if not data:
             break
         buffer += data.decode("utf-8", errors="replace")
-        buffer = buffer.lstrip()  # Defensive: remove leading whitespace
+        buffer = buffer.lstrip()
         while buffer:
             command, rest = parse_data(buffer)
             if command is not None:
+                # If we're a replica and receive a bulk string (RDB file), just skip it
+                if replica and isinstance(command, str) and buffer.startswith("$"):
+                    # Skip the RDB file bulk string
+                    buffer = rest
+                    continue
                 send_command(client_conn, command, replica)
                 if rest == buffer:
-                    break  # Defensive: avoid infinite loop
+                    break
                 buffer = rest
             else:
                 break
