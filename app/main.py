@@ -294,13 +294,15 @@ def handle_client(client_conn, replica=False):
         if not data:
             break
         buffer += data.decode("utf-8", errors="replace")
+        buffer = buffer.lstrip()  # Defensive: remove leading whitespace
         while buffer:
             command, rest = parse_data(buffer)
             if command is not None:
                 send_command(client_conn, command, replica)
+                if rest == buffer:
+                    break  # Defensive: avoid infinite loop
                 buffer = rest
             else:
-                # Incomplete command, wait for more data
                 break
     client_conn.close()
 
