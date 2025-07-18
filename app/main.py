@@ -145,7 +145,7 @@ def start_replica_sync(command):
             except Exception as e:
                 print(f"Error sending command to replica: {e}")   
 
-def send_command(client_conn, response):
+def send_command(client_conn, response, replica):
     command = response[0].lower() if response and isinstance(response, list) and response[0] else None
     if command is None:
         resp = format_resp("Error: Unknown command")
@@ -237,21 +237,22 @@ def send_command(client_conn, response):
         resp = format_resp("FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0")
     else:
         resp = format_resp("Error: Unknown command")
-    client_conn.sendall(resp.encode('utf-8'))
+    if not replica:
+        client_conn.sendall(resp.encode('utf-8'))
 
     if command == "psync":
         empty_rdb_hex = "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
         client_conn.sendall(b"$" + str(len(bytes.fromhex(empty_rdb_hex))).encode('utf-8') + b"\r\n" + bytes.fromhex(empty_rdb_hex))
        
 
-def handle_client(client_conn):
+def handle_client(client_conn, replica=False):
     while True:
         data:bytes = client_conn.recv(1024)
         if not data:
             break
         data = data.decode('utf-8')
         command = parse_data(data)
-        send_command(client_conn, command)
+        send_command(client_conn, command, replica)
         
     client_conn.close()
 
@@ -289,7 +290,7 @@ def main():
         send_to_master_node(master_socket, ['REPLCONF', 'capa', 'psync2'], "OK")
         send_to_master_node(master_socket, ['PSYNC','?', '-1'], "FULLRESYNC", decode=False)
         # connection to master node is established, start handling client connections
-        threading.Thread(target=handle_client, args=(master_socket,), daemon=True).start()
+        threading.Thread(target=handle_client, args=(master_socket, True), daemon=True).start()
 
     if args.dir and args.dbfilename:
         read_keys_from_rdb_file()
