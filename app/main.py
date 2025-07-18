@@ -247,24 +247,16 @@ def send_command(client_conn, response, replica):
        
 
 def handle_client(client_conn, replica=False):
-    buffer = ""
-    while (data := client_conn.recv(1024)):
-        buffer += data.decode('utf-8')
-        while buffer:
-            command, rest = parse_data(buffer), None
-            if isinstance(command, tuple):
-                command, rest = command
-            else:
-                rest = ""
-            if command:
-                send_command(client_conn, command, replica)
-                buffer = rest
-            else:
-                # Incomplete command, wait for more data
-                # Always keep the buffer as-is if we couldn't parse a command
-                break
+    while True:
+        data:bytes = client_conn.recv(1024)
+        if not data:
+            break
+        data = data.decode('utf-8')
+        command = parse_data(data)
+        send_command(client_conn, command)
+        
     client_conn.close()
-
+    
 def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
     print("Logs from your program will appear here!")
