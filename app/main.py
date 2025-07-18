@@ -253,8 +253,14 @@ def send_command(client_conn, response, replica):
                 replica_info += f"\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\nmaster_repl_offset:0"
                 resp = format_resp(replica_info)
     elif command == "replconf":
-        resp = format_resp(["REPLCONF", "ACK", "0"])
-        client_conn.sendall(resp.encode('utf-8'))
+        if len(response) >= 3 and response[1].lower() == "getack" and response[2] == "*":
+            resp = format_resp(["REPLCONF", "ACK", "0"])
+            client_conn.sendall(resp.encode('utf-8'))
+            return  # Important: do not fall through and send again
+        else:
+            resp = format_resp("OK")
+            client_conn.sendall(resp.encode('utf-8'))
+            return
 
     elif command == "psync":
         REPLICA_NODES.append(client_conn)
