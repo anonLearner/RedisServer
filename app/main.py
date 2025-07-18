@@ -260,7 +260,7 @@ def main():
     else:
         def send_to_master_node(conn, data, wait_for_cmd='OK'):
             conn.send(format_resp(data).encode('utf-8'))
-            response = conn.recv(1024).decode('utf-8')
+            response = conn.recv(4028).decode('utf-8')
             if wait_for_cmd not in parse_data(response):
                 raise Exception(f"Expected response '{wait_for_cmd}', but got '{response}'")
             
