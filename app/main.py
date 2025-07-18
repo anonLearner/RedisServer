@@ -295,7 +295,7 @@ def handle_client(client_conn, replica=False):
             break
         buffer += data
         while buffer:
-            # Only decode enough to parse the RESP header
+            # Handle RDB file as a bulk string in replica mode
             if replica and buffer.startswith(b"$"):
                 crlf = buffer.find(b"\r\n")
                 if crlf == -1:
@@ -309,26 +309,26 @@ def handle_client(client_conn, replica=False):
                     break  # Wait for full RDB file
                 # Optionally, store the RDB file:
                 rdb_data = buffer[crlf+2:crlf+2+length]
-                # Update offset
                 config["offset"] += total_len
-                # Move buffer forward
                 buffer = buffer[total_len:]
                 continue
 
-            # Otherwise, try to parse as a normal RESP command
+            # Try to find the end of the next RESP command (up to the next \r\n)
+            # We'll decode only as much as needed for parse_data
             try:
-                # Only decode as much as needed for parse_data
-                decoded = buffer.decode("utf-8", errors="replace")
+                # Find a reasonable chunk to decode (up to the next 4k or end of buffer)
+                decode_len = min(len(buffer), 4096)
+                decoded = buffer[:decode_len].decode("utf-8", errors="replace")
             except Exception:
                 break  # Wait for more data
 
             command, rest = parse_data(decoded)
             if command is not None:
+                # Calculate how many bytes were consumed in the buffer
                 bytes_consumed = len(decoded) - len(rest)
                 send_command(client_conn, command, replica)
                 if replica:
                     config["offset"] += bytes_consumed
-                # Move buffer forward by bytes_consumed
                 buffer = buffer[bytes_consumed:]
             else:
                 break
