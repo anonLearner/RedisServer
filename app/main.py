@@ -288,47 +288,19 @@ def send_command(client_conn, response, replica):
 
 
 def handle_client(client_conn, replica=False):
-    buffer = b""
+    buffer = ""
     while True:
-        data = client_conn.recv(4096)
+        data = client_conn.recv(1024)
         if not data:
             break
-        buffer += data
+        buffer += data.decode('utf-8', errors='replace')
         while buffer:
-            # Handle RDB file as a bulk string in replica mode
-            if replica and buffer.startswith(b"$"):
-                crlf = buffer.find(b"\r\n")
-                if crlf == -1:
-                    break  # Incomplete header
-                try:
-                    length = int(buffer[1:crlf])
-                except ValueError:
-                    break  # Malformed header
-                total_len = crlf + 2 + length + 2  # header + data + trailing \r\n
-                if len(buffer) < total_len:
-                    break  # Wait for full RDB file
-                # Optionally, store the RDB file:
-                rdb_data = buffer[crlf+2:crlf+2+length]
-                # Update offset if you want: config["offset"] += total_len
-                buffer = buffer[total_len:]
-                continue
-
-            # Only decode enough to parse the next RESP command
-            # Try to decode up to the first 4096 bytes or the whole buffer
-            max_decode = min(len(buffer), 4096)
-            try:
-                decoded = buffer[:max_decode].decode("utf-8", errors="replace")
-            except Exception:
-                break  # Wait for more data
-
-            command, rest = parse_data(decoded)
+            command, rest = parse_data(buffer)
             if command is not None:
-                # Find out how many bytes were consumed
-                bytes_consumed = len(decoded) - len(rest)
                 send_command(client_conn, command, replica)
-                # Remove the consumed bytes from the buffer
-                buffer = buffer[bytes_consumed:]
+                buffer = rest
             else:
+                # Incomplete command, wait for more data
                 break
     client_conn.close()
 
