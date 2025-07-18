@@ -262,7 +262,8 @@ def send_command(client_conn, response, replica):
                 pattern = response[2]
                 if pattern == "*":
                     resp = format_resp(["REPLCONF", "ACK", "0"])
-        client_conn.sendall(resp.encode('utf-8'))
+        if resp is not None:
+            client_conn.sendall(resp.encode('utf-8'))
 
     elif command == "psync":
         REPLICA_NODES.append(client_conn)
