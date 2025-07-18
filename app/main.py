@@ -313,18 +313,20 @@ def handle_client(client_conn, replica=False):
                 buffer = buffer[total_len:]
                 continue
 
-            # Try to decode as much as possible for RESP command parsing
+            # Only decode enough to parse the next RESP command
+            # Try to decode up to the first 4096 bytes or the whole buffer
+            max_decode = min(len(buffer), 4096)
             try:
-                decoded = buffer.decode("utf-8", errors="replace")
+                decoded = buffer[:max_decode].decode("utf-8", errors="replace")
             except Exception:
                 break  # Wait for more data
 
             command, rest = parse_data(decoded)
             if command is not None:
-                # Figure out how many bytes were consumed
+                # Find out how many bytes were consumed
                 bytes_consumed = len(decoded) - len(rest)
                 send_command(client_conn, command, replica)
-                # Update offset if you want: config["offset"] += bytes_consumed
+                # Remove the consumed bytes from the buffer
                 buffer = buffer[bytes_consumed:]
             else:
                 break
