@@ -317,8 +317,7 @@ def handle_client(client_conn, replica=False):
             # We'll decode only as much as needed for parse_data
             try:
                 # Find a reasonable chunk to decode (up to the next 4k or end of buffer)
-                decode_len = min(len(buffer), 4096)
-                decoded = buffer[:decode_len].decode("utf-8", errors="replace")
+                decoded = buffer.decode("utf-8", errors="replace")
             except Exception:
                 break  # Wait for more data
 
@@ -329,7 +328,7 @@ def handle_client(client_conn, replica=False):
                 send_command(client_conn, command, replica)
                 if replica:
                     config["offset"] += bytes_consumed
-                buffer = buffer[bytes_consumed:]
+                buffer = rest.encode("utf-8")
             else:
                 break
     client_conn.close()
