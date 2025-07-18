@@ -224,9 +224,14 @@ def send_command(client_conn, response):
         resp = format_resp("OK")
     elif command == "psync":
         resp = format_resp("FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0")
+        client_conn.sendall(resp.encode('utf-8'))
+        empty_rdb_hex = "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
+        empty_rdb_bytes = bytes.fromhex(empty_rdb_hex)
+        resp = f"${len(empty_rdb_bytes)}\r\n{empty_rdb_bytes}"
     else:
         resp = format_resp("Error: Unknown command")
     client_conn.sendall(resp.encode('utf-8'))
+       
 
 def handle_client(client_conn):
     while True:
@@ -258,18 +263,20 @@ def main():
     if args.replicaof is None:
         config['replicaof'] = None
     else:
-        def send_to_master_node(conn, data, wait_for_cmd='OK'):
+        def send_to_master_node(conn, data, wait_for_cmd='OK', decode=True):
             conn.send(format_resp(data).encode('utf-8'))
-            response = conn.recv(4028).decode('utf-8')
-            if wait_for_cmd not in parse_data(response):
-                raise Exception(f"Expected response '{wait_for_cmd}', but got '{response}'")
-            
+            response = conn.recv(4028)
+            if decode:
+                response = response.decode('utf-8')
+                if wait_for_cmd not in parse_data(response):
+                    raise Exception(f"Expected response '{wait_for_cmd}', but got '{response}'")
+                
         config['replicaof'] = args.replicaof.split()
         master_socket = socket.create_connection((config['replicaof'][0], int(config['replicaof'][1])))
         send_to_master_node(master_socket, ["PING"], "PONG")
         send_to_master_node(master_socket, ['REPLCONF', 'listening-port', str(config['port'])], "OK")
         send_to_master_node(master_socket, ['REPLCONF', 'capa', 'psync2'], "OK")
-        send_to_master_node(master_socket, ['PSYNC','?', '-1'], "FULLRESYNC")
+        send_to_master_node(master_socket, ['PSYNC','?', '-1'], "FULLRESYNC", decode=False)
 
 
     if args.dir and args.dbfilename:
