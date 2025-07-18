@@ -260,7 +260,7 @@ def send_command(client_conn, response, replica):
                 resp = format_resp(replica_info)
     elif command == "replconf":
         if len(response) >= 3 and response[1].lower() == "getack" and response[2] == "*":
-            resp = format_resp(["REPLCONF", "ACK", f"{config['offset']}"])
+            resp = format_resp(["REPLCONF", "ACK", "0"])
             client_conn.sendall(resp.encode("utf-8"))
             return  # Important: do not fall through and send again
         else:
@@ -288,47 +288,25 @@ def send_command(client_conn, response, replica):
 
 
 def handle_client(client_conn, replica=False):
-    buffer = b""
+    buffer = ""
     while True:
         data = client_conn.recv(1024)
         if not data:
             break
-        buffer += data
+        buffer += data.decode("utf-8", errors="replace")
+        buffer = buffer.lstrip()
         while buffer:
-            # Handle RDB file as a bulk string in replica mode
-            if replica and buffer.startswith(b"$"):
-                crlf = buffer.find(b"\r\n")
-                if crlf == -1:
-                    break  # Incomplete header
-                try:
-                    length = int(buffer[1:crlf])
-                except ValueError:
-                    break  # Malformed header
-                total_len = crlf + 2 + length + 2  # header + data + trailing \r\n
-                if len(buffer) < total_len:
-                    break  # Wait for full RDB file
-                # Optionally, store the RDB file:
-                rdb_data = buffer[crlf+2:crlf+2+length]
-                config["offset"] += total_len
-                buffer = buffer[total_len:]
-                continue
-
-            # Try to find the end of the next RESP command (up to the next \r\n)
-            # We'll decode only as much as needed for parse_data
-            try:
-                # Find a reasonable chunk to decode (up to the next 4k or end of buffer)
-                decoded = buffer.decode("utf-8", errors="replace")
-            except Exception:
-                break  # Wait for more data
-
-            command, rest = parse_data(decoded)
+            command, rest = parse_data(buffer)
             if command is not None:
-                # Calculate how many bytes were consumed in the buffer
-                bytes_consumed = len(decoded) - len(rest)
+                # If we're a replica and receive a bulk string (RDB file), just skip it
+                if replica and isinstance(command, str) and buffer.startswith("$"):
+                    # Skip the RDB file bulk string
+                    buffer = rest
+                    continue
                 send_command(client_conn, command, replica)
-                if replica:
-                    config["offset"] += bytes_consumed
-                buffer = rest.encode("utf-8")
+                if rest == buffer:
+                    break
+                buffer = rest
             else:
                 break
     client_conn.close()
@@ -374,7 +352,6 @@ def main():
         master_socket = socket.create_connection(
             (config["replicaof"][0], int(config["replicaof"][1]))
         )
-        config["offset"] = 0
         send_to_master_node(master_socket, ["PING"], "PONG")
         send_to_master_node(master_socket, ["REPLCONF", "listening-port", str(config["port"])], "OK"      )
         send_to_master_node(master_socket, ["REPLCONF", "capa", "psync2"], "OK")
