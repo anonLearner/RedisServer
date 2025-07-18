@@ -288,31 +288,48 @@ def send_command(client_conn, response, replica):
 
 
 def handle_client(client_conn, replica=False):
-    buffer = ""
+    buffer = b""
     while True:
         data = client_conn.recv(1024)
         if not data:
             break
-        buffer += data.decode("utf-8", errors="replace")
-        buffer = buffer.lstrip()
+        buffer += data
         while buffer:
-            buffer_len_before = len(buffer)
-            command, rest = parse_data(buffer)
-            buffer_len_after = len(rest)
-            bytes_consumed = buffer_len_before - buffer_len_after
+            # Only decode enough to parse the RESP header
+            if replica and buffer.startswith(b"$"):
+                crlf = buffer.find(b"\r\n")
+                if crlf == -1:
+                    break  # Incomplete header
+                try:
+                    length = int(buffer[1:crlf])
+                except ValueError:
+                    break  # Malformed header
+                total_len = crlf + 2 + length + 2  # header + data + trailing \r\n
+                if len(buffer) < total_len:
+                    break  # Wait for full RDB file
+                # Optionally, store the RDB file:
+                rdb_data = buffer[crlf+2:crlf+2+length]
+                # Update offset
+                config["offset"] += total_len
+                # Move buffer forward
+                buffer = buffer[total_len:]
+                continue
 
+            # Otherwise, try to parse as a normal RESP command
+            try:
+                # Only decode as much as needed for parse_data
+                decoded = buffer.decode("utf-8", errors="replace")
+            except Exception:
+                break  # Wait for more data
+
+            command, rest = parse_data(decoded)
             if command is not None:
-                # If we're a replica and receive a bulk string (RDB file), just skip it
-                if replica and isinstance(command, str) and buffer.startswith("$"):
-                    # Skip the RDB file bulk string
-                    buffer = rest
-                    continue
+                bytes_consumed = len(decoded) - len(rest)
                 send_command(client_conn, command, replica)
                 if replica:
                     config["offset"] += bytes_consumed
-                if rest == buffer:
-                    break
-                buffer = rest
+                # Move buffer forward by bytes_consumed
+                buffer = buffer[bytes_consumed:]
             else:
                 break
     client_conn.close()
