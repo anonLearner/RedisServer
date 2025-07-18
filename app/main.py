@@ -174,11 +174,7 @@ def start_replica_sync(command):
 
 
 def send_command(client_conn, response, replica):
-    command = (
-        response[0].lower()
-        if response and isinstance(response, list) and response[0]
-        else None
-    )
+    command = response[0].lower() if response and isinstance(response, list) and response[0] else None
     if command is None:
         resp = format_resp("Error: Unknown command")
     elif command == "ping":
@@ -222,16 +218,12 @@ def send_command(client_conn, response, replica):
             resp = format_resp(value)
     elif command == "config":
         if len(response) < 3:
-            resp = format_resp(
-                "Error: CONFIG command requires a subcommand and an argument"
-            )
+            resp = format_resp("Error: CONFIG SET command requires a parameter and a value")
         else:
             subcommand = response[1].lower()
             if subcommand == "set":
                 if len(response) < 4:
-                    resp = format_resp(
-                        "Error: CONFIG SET command requires a parameter and a value"
-                    )
+                    resp = format_resp("Error: CONFIG SET command requires a parameter and a value")
                 else:
                     param = response[2]
                     value = response[3]
@@ -267,7 +259,15 @@ def send_command(client_conn, response, replica):
                 replica_info += f"\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\nmaster_repl_offset:0"
                 resp = format_resp(replica_info)
     elif command == "replconf":
-        resp = format_resp("OK")
+        if len(response) >= 3 and response[1].lower() == "getack" and response[2] == "*":
+            resp = format_resp(["REPLCONF", "ACK", "0"])
+            client_conn.sendall(resp.encode("utf-8"))
+            return  # Important: do not fall through and send again
+        else:
+            resp = format_resp("OK")
+            if not replica:
+                client_conn.sendall(resp.encode("utf-8"))
+            return
     elif command == "psync":
         REPLICA_NODES.append(client_conn)
         resp = format_resp("FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0")
