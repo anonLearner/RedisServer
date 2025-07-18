@@ -249,8 +249,7 @@ def handle_client(client_conn, replica=False):
     buffer = ""
     while (data := client_conn.recv(1024)):
         buffer += data.decode('utf-8')
-        # Try to parse and handle as many commands as possible from the buffer
-        while True:
+        while buffer:
             command, rest = parse_data(buffer), None
             if isinstance(command, tuple):
                 command, rest = command
@@ -259,11 +258,13 @@ def handle_client(client_conn, replica=False):
             if command:
                 send_command(client_conn, command, replica)
                 buffer = rest
-                if not buffer:
-                    break
             else:
-                # Incomplete command, wait for more data
-                break
+                # If rest is not None and shorter than buffer, keep it
+                if rest is not None and rest != buffer:
+                    buffer = rest
+                else:
+                    # Incomplete command, wait for more data
+                    break
         
     client_conn.close()
 
