@@ -253,10 +253,10 @@ def handle_client(client_conn, replica=False):
             break
         data = data.decode('utf-8')
         command = parse_data(data)
-        send_command(client_conn, command)
+        send_command(client_conn, command, replica)
         
     client_conn.close()
-    
+
 def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
     print("Logs from your program will appear here!")
