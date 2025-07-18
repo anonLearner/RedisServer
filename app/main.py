@@ -295,8 +295,8 @@ def handle_client(client_conn, replica=False):
             break
         buffer += data
         while buffer:
-            # Handle RDB file as a bulk string in replica mode
-            if replica and buffer.startswith(b"$"):
+            # Handle RESP bulk string (RDB file or any binary data)
+            if buffer.startswith(b"$"):
                 crlf = buffer.find(b"\r\n")
                 if crlf == -1:
                     break  # Incomplete header
@@ -306,13 +306,13 @@ def handle_client(client_conn, replica=False):
                     break  # Malformed header
                 total_len = crlf + 2 + length + 2  # header + data + trailing \r\n
                 if len(buffer) < total_len:
-                    break  # Wait for full RDB file
-                # Optionally, store the RDB file:
-                # rdb_data = buffer[crlf+2:crlf+2+length]
+                    break  # Wait for full data
+                bulk_data = buffer[crlf+2:crlf+2+length]
+                # Here you can process the RDB file or other binary data if needed
                 buffer = buffer[total_len:]
                 continue
 
-            # Try to decode as much as possible for RESP command parsing
+            # For other RESP types, decode and parse as usual
             try:
                 decoded = buffer.decode("utf-8", errors="replace")
             except Exception:
@@ -320,13 +320,13 @@ def handle_client(client_conn, replica=False):
 
             command, rest = parse_data(decoded)
             if command is not None:
-                # Figure out how many bytes were consumed
                 bytes_consumed = len(decoded) - len(rest)
                 send_command(client_conn, command, replica)
                 buffer = buffer[bytes_consumed:]
             else:
                 break
     client_conn.close()
+
 
 def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
