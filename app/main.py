@@ -27,49 +27,71 @@ REPLICA_NODES = []
 
 def parse_data(data: str):
     """
-    Parses the incoming data and returns a command.
+    Parses the incoming data and returns (command, rest_of_buffer).
     The data is expected to be in the format of Redis protocol.
     """
     def parse_next(data):
         if not data:
             return None, ''
         if data[0] == '*':
-            # Array type
             crlf = data.find('\r\n')
-            count = int(data[1:crlf])
+            if crlf == -1:
+                return None, data  # incomplete
+            try:
+                count = int(data[1:crlf])
+            except ValueError:
+                return None, data
             rest = data[crlf+2:]
             arr = []
             for _ in range(count):
                 elem, rest = parse_next(rest)
+                if elem is None:
+                    return None, data  # incomplete
                 arr.append(elem)
             return arr, rest
         elif data[0] == '$':
             crlf = data.find('\r\n')
-            length = int(data[1:crlf])
+            if crlf == -1:
+                return None, data  # incomplete
+            try:
+                length = int(data[1:crlf])
+            except ValueError:
+                return None, data
             start = crlf+2
             end = start+length
+            if len(data) < end+2:
+                return None, data  # incomplete
             bulk = data[start:end]
             rest = data[end+2:]  # skip \r\n after bulk string
             return bulk, rest
         elif data[0] == ':':
             crlf = data.find('\r\n')
-            num = int(data[1:crlf])
+            if crlf == -1:
+                return None, data
+            try:
+                num = int(data[1:crlf])
+            except ValueError:
+                return None, data
             rest = data[crlf+2:]
             return num, rest
         elif data[0] == '+':
             crlf = data.find('\r\n')
+            if crlf == -1:
+                return None, data
             simple = data[1:crlf]
             rest = data[crlf+2:]
             return simple, rest
         elif data[0] == '-':
             crlf = data.find('\r\n')
+            if crlf == -1:
+                return None, data
             err = f"Error: {data[1:crlf]}"
             rest = data[crlf+2:]
             return err, rest
         else:
-            return None, ''
+            return None, data
 
-    result, _ = parse_next(data)
+    result, rest = parse_next(data)
     return result
     
 def format_resp(value):
@@ -247,14 +269,20 @@ def send_command(client_conn, response, replica):
        
 
 def handle_client(client_conn, replica=False):
+    buffer = ""
     while True:
-        data:bytes = client_conn.recv(1024)
+        data = client_conn.recv(1024)
         if not data:
             break
-        data = data.decode('utf-8')
-        command = parse_data(data)
-        send_command(client_conn, command, replica)
-        
+        buffer += data.decode('utf-8', errors='replace')
+        while buffer:
+            command, rest = parse_data(buffer)
+            if command is not None:
+                send_command(client_conn, command, replica)
+                buffer = rest
+            else:
+                # Incomplete command, wait for more data
+                break
     client_conn.close()
 
 def main():
@@ -281,7 +309,8 @@ def main():
             response = conn.recv(4028)
             if decode:
                 response = response.decode('utf-8')
-                if wait_for_cmd not in parse_data(response):
+                parsed, _ = parse_data(response)
+                if wait_for_cmd not in str(parsed):
                     raise Exception(f"Expected response '{wait_for_cmd}', but got '{response}'")
                 
         config['replicaof'] = args.replicaof.split()
