@@ -286,7 +286,61 @@ def send_command(client_conn, response, replica):
     if (not replica) and (command != "psync"):
         client_conn.sendall(resp.encode("utf-8"))
 
-
+def parse_resp_bytes(buffer):
+    if not buffer:
+        return None
+    if buffer[0:1] == b'*':  # Array
+        crlf = buffer.find(b'\r\n')
+        if crlf == -1:
+            return None
+        try:
+            count = int(buffer[1:crlf])
+        except ValueError:
+            return None
+        arr = []
+        rest = buffer[crlf+2:]
+        bytes_consumed = crlf + 2
+        for _ in range(count):
+            result = parse_resp_bytes(rest)
+            if result is None:
+                return None
+            elem, elem_consumed = result
+            arr.append(elem)
+            rest = rest[elem_consumed:]
+            bytes_consumed += elem_consumed
+        return arr, bytes_consumed
+    elif buffer[0:1] == b'$':  # Bulk string
+        crlf = buffer.find(b'\r\n')
+        if crlf == -1:
+            return None
+        try:
+            length = int(buffer[1:crlf])
+        except ValueError:
+            return None
+        start = crlf + 2
+        end = start + length
+        if len(buffer) < end + 2:
+            return None
+        bulk = buffer[start:end].decode('utf-8', errors='replace')
+        return bulk, end + 2
+    elif buffer[0:1] == b'+':  # Simple string
+        crlf = buffer.find(b'\r\n')
+        if crlf == -1:
+            return None
+        return buffer[1:crlf].decode('utf-8', errors='replace'), crlf + 2
+    elif buffer[0:1] == b':':  # Integer
+        crlf = buffer.find(b'\r\n')
+        if crlf == -1:
+            return None
+        return int(buffer[1:crlf]), crlf + 2
+    elif buffer[0:1] == b'-':  # Error
+        crlf = buffer.find(b'\r\n')
+        if crlf == -1:
+            return None
+        return "Error: " + buffer[1:crlf].decode('utf-8', errors='replace'), crlf + 2
+    else:
+        return None
+    
 def handle_client(client_conn, replica=False):
     buffer = b""
     while True:
@@ -295,36 +349,13 @@ def handle_client(client_conn, replica=False):
             break
         buffer += data
         while buffer:
-            # Handle RESP bulk string (RDB file or any binary data)
-            if buffer.startswith(b"$"):
-                crlf = buffer.find(b"\r\n")
-                if crlf == -1:
-                    break  # Incomplete header
-                try:
-                    length = int(buffer[1:crlf])
-                except ValueError:
-                    break  # Malformed header
-                total_len = crlf + 2 + length + 2  # header + data + trailing \r\n
-                if len(buffer) < total_len:
-                    break  # Wait for full data
-                bulk_data = buffer[crlf+2:crlf+2+length]
-                # Here you can process the RDB file or other binary data if needed
-                buffer = buffer[total_len:]
-                continue
-
-            # For other RESP types, decode and parse as usual
-            try:
-                decoded = buffer.decode("utf-8", errors="replace")
-            except Exception:
-                break  # Wait for more data
-
-            command, rest = parse_data(decoded)
-            if command is not None:
-                bytes_consumed = len(decoded) - len(rest)
-                send_command(client_conn, command, replica)
-                buffer = buffer[bytes_consumed:]
-            else:
-                break
+            # Use a byte-based RESP parser
+            result = parse_resp_bytes(buffer)
+            if result is None:
+                break  # Not enough data for a full command
+            command, bytes_consumed = result
+            send_command(client_conn, command, replica)
+            buffer = buffer[bytes_consumed:]
     client_conn.close()
 
 
