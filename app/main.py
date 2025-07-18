@@ -23,6 +23,7 @@ for arrays, we need to send a response in the format: *<number-of-elements>\r\n<
 data_in_memory = {}
 expiration_times = {}
 config = {}
+REPLICA_NODES = []
 
 def parse_data(data: str):
     """
@@ -134,7 +135,15 @@ def read_keys_from_rdb_file():
     except FileNotFoundError:
         return None  # Return empty list if file does not exist
     except Exception as e:
-        return [f"Error reading RDB file: {str(e)}"]       
+        return [f"Error reading RDB file: {str(e)}"]   
+
+def start_replica_sync(command):
+    if REPLICA_NODES:
+        for replica in REPLICA_NODES:
+            try:
+                replica.sendall(format_resp(command).encode('utf-8'))
+            except Exception as e:
+                print(f"Error sending command to replica: {e}")   
 
 def send_command(client_conn, response):
     command = response[0].lower() if response and isinstance(response, list) and response[0] else None
@@ -166,6 +175,7 @@ def send_command(client_conn, response):
                     expiration_times[key] = time.time() * 1000 + expiration_time
             # Store the key-value pair
             data_in_memory[key] = value
+            start_replica_sync(response)
             resp = format_resp("OK")
     elif command == "get":
         if len(response) < 2:
@@ -223,6 +233,7 @@ def send_command(client_conn, response):
     elif command == "replconf":
         resp = format_resp("OK")
     elif command == "psync":
+        REPLICA_NODES.append(client_conn)
         resp = format_resp("FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0")
     else:
         resp = format_resp("Error: Unknown command")
