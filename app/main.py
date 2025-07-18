@@ -260,7 +260,7 @@ def send_command(client_conn, response, replica):
                 resp = format_resp(replica_info)
     elif command == "replconf":
         if len(response) >= 3 and response[1].lower() == "getack" and response[2] == "*":
-            resp = format_resp(["REPLCONF", "ACK", "0"])
+            resp = format_resp(["REPLCONF", "ACK", f"{config['offset']}"])
             client_conn.sendall(resp.encode("utf-8"))
             return  # Important: do not fall through and send again
         else:
@@ -296,7 +296,11 @@ def handle_client(client_conn, replica=False):
         buffer += data.decode("utf-8", errors="replace")
         buffer = buffer.lstrip()
         while buffer:
+            buffer_len_before = len(buffer)
             command, rest = parse_data(buffer)
+            buffer_len_after = len(rest)
+            bytes_consumed = buffer_len_before - buffer_len_after
+
             if command is not None:
                 # If we're a replica and receive a bulk string (RDB file), just skip it
                 if replica and isinstance(command, str) and buffer.startswith("$"):
@@ -304,6 +308,8 @@ def handle_client(client_conn, replica=False):
                     buffer = rest
                     continue
                 send_command(client_conn, command, replica)
+                if replica:
+                    config["offset"] += bytes_consumed
                 if rest == buffer:
                     break
                 buffer = rest
@@ -352,6 +358,7 @@ def main():
         master_socket = socket.create_connection(
             (config["replicaof"][0], int(config["replicaof"][1]))
         )
+        config["offset"] = 0
         send_to_master_node(master_socket, ["PING"], "PONG")
         send_to_master_node(master_socket, ["REPLCONF", "listening-port", str(config["port"])], "OK"      )
         send_to_master_node(master_socket, ["REPLCONF", "capa", "psync2"], "OK")
