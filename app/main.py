@@ -288,7 +288,8 @@ def main():
         send_to_master_node(master_socket, ['REPLCONF', 'listening-port', str(config['port'])], "OK")
         send_to_master_node(master_socket, ['REPLCONF', 'capa', 'psync2'], "OK")
         send_to_master_node(master_socket, ['PSYNC','?', '-1'], "FULLRESYNC", decode=False)
-
+        # connection to master node is established, start handling client connections
+        threading.Thread(target=handle_client, args=(master_socket,), daemon=True).start()
 
     if args.dir and args.dbfilename:
         read_keys_from_rdb_file()
