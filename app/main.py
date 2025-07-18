@@ -220,7 +220,10 @@ def send_command(client_conn, response):
                     replica_info = "role:master"
                 replica_info += f"\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\nmaster_repl_offset:0"
                 resp = format_resp(replica_info)
-
+    elif command == "replconf":
+        resp = format_resp("OK")
+    elif command == "psync":
+        resp = format_resp("FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0")
     else:
         resp = format_resp("Error: Unknown command")
     client_conn.sendall(resp.encode('utf-8'))
