@@ -237,12 +237,13 @@ def send_command(client_conn, response, replica):
         resp = format_resp("FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0")
     else:
         resp = format_resp("Error: Unknown command")
-    if not replica:
-        client_conn.sendall(resp.encode('utf-8'))
 
     if command == "psync":
         empty_rdb_hex = "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
         client_conn.sendall(b"$" + str(len(bytes.fromhex(empty_rdb_hex))).encode('utf-8') + b"\r\n" + bytes.fromhex(empty_rdb_hex))
+
+    elif not replica:
+        client_conn.sendall(resp.encode('utf-8'))
        
 
 def handle_client(client_conn, replica=False):
