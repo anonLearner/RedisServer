@@ -288,19 +288,46 @@ def send_command(client_conn, response, replica):
 
 
 def handle_client(client_conn, replica=False):
-    buffer = ""
+    buffer = b""
     while True:
-        data = client_conn.recv(1024)
+        data = client_conn.recv(4096)
         if not data:
             break
-        buffer += data.decode('utf-8', errors='replace')
+        buffer += data
         while buffer:
-            command, rest = parse_data(buffer)
+            # Handle RESP bulk string (RDB file or any binary data)
+            if buffer.startswith(b"$"):
+                crlf = buffer.find(b"\r\n")
+                if crlf == -1:
+                    break  # Incomplete header
+                try:
+                    length = int(buffer[1:crlf])
+                except ValueError:
+                    break  # Malformed header
+                total_len = crlf + 2 + length + 2  # header + data + trailing \r\n
+                if len(buffer) < total_len:
+                    break  # Wait for full data
+                bulk_data = buffer[crlf+2:crlf+2+length]
+                # Optionally process/store RDB file here if needed
+                if replica:
+                    config["offset"] += total_len
+                buffer = buffer[total_len:]
+                continue
+
+            # Try to decode as much as possible for RESP command parsing
+            try:
+                decoded = buffer.decode("utf-8", errors="replace")
+            except Exception:
+                break  # Wait for more data
+
+            command, rest = parse_data(decoded)
             if command is not None:
+                bytes_consumed = len(decoded) - len(rest)
                 send_command(client_conn, command, replica)
-                buffer = rest
+                if replica:
+                    config["offset"] += bytes_consumed
+                buffer = buffer[bytes_consumed:]
             else:
-                # Incomplete command, wait for more data
                 break
     client_conn.close()
 
@@ -329,7 +356,7 @@ def main():
     if args.replicaof is None:
         config["replicaof"] = None
     else:
-
+        config["offset"] = 0
         def send_to_master_node(conn, data, wait_for_cmd="OK", decode=True):
             conn.send(format_resp(data).encode("utf-8"))
             response = conn.recv(4028)
