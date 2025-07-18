@@ -257,7 +257,7 @@ def send_command(client_conn, response, replica):
             resp = format_resp("Error: INFO command requires an argument")
         else:
             argument = response[1]
-            if argument == "ACK":
+            if argument == "GETACK":
                 pattern = response[2]
                 if pattern == "*":
                     resp = format_resp(["REPLCONF", "ACK", "0"])
