@@ -253,6 +253,7 @@ def send_command(client_conn, response, replica):
                 replica_info += f"\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\nmaster_repl_offset:0"
                 resp = format_resp(replica_info)
     elif command == "replconf":
+        print("replica got replconf command")
         if len(response) >= 3 and response[1].lower() == "getack" and response[2] == "*":
             resp = format_resp(["REPLCONF", "ACK", "0"])
             client_conn.sendall(resp.encode('utf-8'))
@@ -282,7 +283,7 @@ def handle_client(client_conn, replica=False):
         data = client_conn.recv(1024)
         if not data:
             break
-        buffer += data.decode('utf-8', errors='replace')
+        buffer += data.decode('utf-8')
         while buffer:
             command, rest = parse_data(buffer)
             if command is not None:
@@ -323,6 +324,7 @@ def main():
                 
         config['replicaof'] = args.replicaof.split()
         master_socket = socket.create_connection((config['replicaof'][0], int(config['replicaof'][1])))
+        print("connected to master node")
         send_to_master_node(master_socket, ["PING"], "PONG")
         send_to_master_node(master_socket, ['REPLCONF', 'listening-port', str(config['port'])], "OK")
         send_to_master_node(master_socket, ['REPLCONF', 'capa', 'psync2'], "OK")
