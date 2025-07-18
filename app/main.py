@@ -92,7 +92,7 @@ def parse_data(data: str):
             return None, data
 
     result, rest = parse_next(data)
-    return result
+    return result, rest  # <-- fix: always return a tuple
     
 def format_resp(value):
     if isinstance(value, str):
