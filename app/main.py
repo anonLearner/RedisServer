@@ -288,22 +288,45 @@ def send_command(client_conn, response, replica):
 
 
 def handle_client(client_conn, replica=False):
-    buffer = ""
+    buffer = b""
     while True:
-        data = client_conn.recv(1024)
+        data = client_conn.recv(4096)
         if not data:
             break
-        buffer += data.decode('utf-8', errors='replace')
+        buffer += data
         while buffer:
-            command, rest = parse_data(buffer)
+            # Handle RDB file as a bulk string in replica mode
+            if replica and buffer.startswith(b"$"):
+                crlf = buffer.find(b"\r\n")
+                if crlf == -1:
+                    break  # Incomplete header
+                try:
+                    length = int(buffer[1:crlf])
+                except ValueError:
+                    break  # Malformed header
+                total_len = crlf + 2 + length + 2  # header + data + trailing \r\n
+                if len(buffer) < total_len:
+                    break  # Wait for full RDB file
+                # Optionally, store the RDB file:
+                # rdb_data = buffer[crlf+2:crlf+2+length]
+                buffer = buffer[total_len:]
+                continue
+
+            # Try to decode as much as possible for RESP command parsing
+            try:
+                decoded = buffer.decode("utf-8", errors="replace")
+            except Exception:
+                break  # Wait for more data
+
+            command, rest = parse_data(decoded)
             if command is not None:
+                # Figure out how many bytes were consumed
+                bytes_consumed = len(decoded) - len(rest)
                 send_command(client_conn, command, replica)
-                buffer = rest
+                buffer = buffer[bytes_consumed:]
             else:
-                # Incomplete command, wait for more data
                 break
     client_conn.close()
-
 
 def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
