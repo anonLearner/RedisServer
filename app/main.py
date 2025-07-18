@@ -259,13 +259,9 @@ def handle_client(client_conn, replica=False):
                 send_command(client_conn, command, replica)
                 buffer = rest
             else:
-                # If rest is not None and shorter than buffer, keep it
-                if rest is not None and rest != buffer:
-                    buffer = rest
-                else:
-                    # Incomplete command, wait for more data
-                    break
-        
+                # Incomplete command, wait for more data
+                # Always keep the buffer as-is if we couldn't parse a command
+                break
     client_conn.close()
 
 def main():
