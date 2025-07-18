@@ -168,6 +168,7 @@ def start_replica_sync(command):
                 print(f"Error sending command to replica: {e}")   
 
 def send_command(client_conn, response, replica):
+    print("received response",response)
     command = response[0].lower() if response and isinstance(response, list) and response[0] else None
     if command is None:
         resp = format_resp("Error: Unknown command")
@@ -272,8 +273,9 @@ def send_command(client_conn, response, replica):
 
     else:
         resp = format_resp("Error: Unknown command")
-
+    print("Sending response to client before:", resp)
     if (command != "psync"):
+        print("Sending response to client:", resp)
         client_conn.sendall(resp.encode('utf-8'))
        
 
