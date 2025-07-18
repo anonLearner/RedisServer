@@ -246,13 +246,24 @@ def send_command(client_conn, response, replica):
        
 
 def handle_client(client_conn, replica=False):
-    while True:
-        data:bytes = client_conn.recv(1024)
-        if not data:
-            break
-        data = data.decode('utf-8')
-        command = parse_data(data)
-        send_command(client_conn, command, replica)
+    buffer = ""
+    while (data := client_conn.recv(1024)):
+        buffer += data.decode('utf-8')
+        # Try to parse and handle as many commands as possible from the buffer
+        while True:
+            command, rest = parse_data(buffer), None
+            if isinstance(command, tuple):
+                command, rest = command
+            else:
+                rest = ""
+            if command:
+                send_command(client_conn, command, replica)
+                buffer = rest
+                if not buffer:
+                    break
+            else:
+                # Incomplete command, wait for more data
+                break
         
     client_conn.close()
 
