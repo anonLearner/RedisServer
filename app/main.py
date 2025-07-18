@@ -254,6 +254,14 @@ def send_command(client_conn, response, replica):
                 resp = format_resp(replica_info)
     elif command == "replconf":
         resp = format_resp("OK")
+        if len(response) < 3:
+            resp = format_resp("Error: INFO command requires an argument")
+        else:
+            argument = response[1]
+            if argument == "ACK":
+                pattern = response[2]
+                if pattern == "*":
+                    resp = format_resp(["REPLCONF", "ACK", "0"])
     elif command == "psync":
         REPLICA_NODES.append(client_conn)
         resp = format_resp("FULLRESYNC 8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb 0")
