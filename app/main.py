@@ -298,10 +298,20 @@ def handle_client(client_conn, replica=False, initial_buffer=b""):
         buffer += data
         while buffer:
             print(f"[DEBUG] Buffer length: {len(buffer)}")
+            # RESP Simple String
+            if buffer.startswith(b"+"):
+                crlf = buffer.find(b"\r\n")
+                if crlf == -1:
+                    break
+                line = buffer[1:crlf].decode("utf-8", errors="replace")
+                print(f"[DEBUG] Parsed simple string: {line}")
+                send_command(client_conn, [line], replica)
+                buffer = buffer[crlf+2:]
+                continue
+
             # RESP Bulk String (RDB file or any binary data)
             if buffer.startswith(b"$"):
                 crlf = buffer.find(b"\r\n")
-                print(f"[DEBUG] Bulk string detected, crlf at {crlf}")
                 if crlf == -1:
                     print("[DEBUG] Incomplete bulk string header, waiting for more data.")
                     break
@@ -325,7 +335,7 @@ def handle_client(client_conn, replica=False, initial_buffer=b""):
 
             # RESP Array (for commands like REPLCONF GETACK *)
             if buffer.startswith(b"*"):
-                # Find the end of the array by parsing as much as possible
+                # Only decode as much as needed for the array
                 try:
                     decoded = buffer.decode("utf-8", errors="replace")
                 except Exception as e:
@@ -344,17 +354,6 @@ def handle_client(client_conn, replica=False, initial_buffer=b""):
                 else:
                     print("[DEBUG] Incomplete array command, waiting for more data.")
                     break
-
-            # RESP Simple String
-            if buffer.startswith(b"+"):
-                crlf = buffer.find(b"\r\n")
-                if crlf == -1:
-                    break
-                line = buffer[1:crlf].decode("utf-8", errors="replace")
-                print(f"[DEBUG] Parsed simple string: {line}")
-                send_command(client_conn, [line], replica)
-                buffer = buffer[crlf+2:]
-                continue
 
             # RESP Integer
             if buffer.startswith(b":"):
