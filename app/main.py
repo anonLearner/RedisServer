@@ -2,7 +2,14 @@ import threading
 import time
 import socket
 import argparse
+import sys
 
+def debug(msg):
+    """
+    Debug function to print messages to stderr.
+    This can be used for debugging purposes.
+    """
+    print(f"[DEBUG] {msg}", file=sys.stderr)
 
 """
 In Redis serialization protocol,
@@ -313,14 +320,14 @@ def handle_client(client_conn, replica=False):
                 buffer = buffer[total_len:]
 
                 # DEBUG LOGGING
-                print(f"[replica] Received bulk, next buffer: {buffer[:200]!r}")
+                debug(f"[replica] Received bulk, next buffer: {buffer[:200]!r}")
 
                 # Do not `continue` out of the outer `while buffer:` — let it loop naturally
                 # to pick up next RESP messages
                 continue
 
             # DEBUG BEFORE PARSING ANYTHING
-            print(f"[replica] About to parse buffer: {buffer[:200]!r}")
+            debug(f"[replica] About to parse buffer: {buffer[:200]!r}")
 
             try:
                 decoded = buffer.decode("utf-8", errors="replace")
@@ -332,7 +339,7 @@ def handle_client(client_conn, replica=False):
                 break
 
             bytes_consumed = len(decoded) - len(rest)
-            print(f"[replica] Parsed command: {command}; consumed {bytes_consumed} bytes")
+            debug(f"[replica] Parsed command: {command}; consumed {bytes_consumed} bytes")
 
             send_command(client_conn, command, replica)
             if replica:
@@ -343,7 +350,7 @@ def handle_client(client_conn, replica=False):
 
 def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
-    print("Logs from your program will appear here!")
+    debug("Logs from your program will appear here!")
 
     # Parse command-line arguments for --dir, --dbfilename and --port
     parser = argparse.ArgumentParser()
@@ -396,7 +403,7 @@ def main():
     server_socket = socket.create_server(("localhost", config["port"]), reuse_port=True)
     while True:
         conn, addr = server_socket.accept()  # wait for client
-        print(f"Accepted connection from {addr}")
+        debug(f"Accepted connection from {addr}")
         # Handle each connection in a new thread
         threading.Thread(target=handle_client, args=(conn,), daemon=True).start()
 
