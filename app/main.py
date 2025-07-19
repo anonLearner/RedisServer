@@ -433,7 +433,12 @@ def main():
         send_to_master_node(master_socket, ["REPLCONF", "listening-port", str(config["port"])], "OK")
         send_to_master_node(master_socket, ["REPLCONF", "capa", "psync2"], "OK")
 
-        leftover = send_to_master_node(master_socket, ["PSYNC", "?", "-1"], "FULLRESYNC", decode=False)
+        send_to_master_node(master_socket, ["PSYNC", "?", "-1"], "FULLRESYNC", decode=False)
+
+        master_socket.recv(1024)
+        master_socket.recv(1024)
+        leftover = master_socket.recv(1024)
+
         print('[DEBUG] connection to master node is established, start handling client connections')
         threading.Thread(
             target=handle_client, args=(master_socket, True, leftover), daemon=True
