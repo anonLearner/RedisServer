@@ -464,7 +464,7 @@ def main():
         # Split out the RDB data and trailing CRLF
         rdb_data = rdb_and_extra[:rdb_len]
         trailing_crlf = rdb_and_extra[rdb_len:rdb_len+2]
-        leftover = rdb_and_extra[rdb_len+2:]  # This may be empty or may contain part/all of the next command
+        leftover = rdb_and_extra[rdb_len:]  # This may be empty or may contain part/all of the next command
 
         # Now read more if needed for leftover (to ensure we have the full next command)
         if len(leftover) < 4 or not (leftover.startswith(b"*") or leftover.startswith(b"$") or leftover.startswith(b"+") or leftover.startswith(b"-") or leftover.startswith(b":")):
