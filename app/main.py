@@ -409,9 +409,10 @@ def main():
         def send_to_master_node(conn, data, wait_for_cmd="OK", decode=True):
             print(f"[DEBUG] Sending to master: {data}")
             conn.send(format_resp(data).encode("utf-8"))
-            response = conn.recv(4028)
-            print(f"[DEBUG] Received {len(response)} bytes from master")
             if decode:
+                response = conn.recv(4028)
+                print(f"[DEBUG] Received {len(response)} bytes from master")
+
                 response_str = response.decode("utf-8")
                 parsed, _ = parse_data(response_str)
                 print(f"[DEBUG] Parsed master response: {parsed}")
@@ -420,11 +421,7 @@ def main():
                         f"Expected response '{wait_for_cmd}', but got '{response_str}'"
                     )
                 return b""  # No leftover bytes
-            else:
-                # For PSYNC, return the raw bytes (could include RDB and next command)
-                print(f"[DEBUG] Returning leftover bytes ({len(response)}) after PSYNC")
-                return response
-
+     
         config["replicaof"] = args.replicaof.split()
         master_socket = socket.create_connection(
             (config["replicaof"][0], int(config["replicaof"][1]))
@@ -433,7 +430,7 @@ def main():
         send_to_master_node(master_socket, ["REPLCONF", "listening-port", str(config["port"])], "OK")
         send_to_master_node(master_socket, ["REPLCONF", "capa", "psync2"], "OK")
 
-        send_to_master_node(master_socket, ["PSYNC", "?", "-1"], "FULLRESYNC")
+        send_to_master_node(master_socket, ["PSYNC", "?", "-1"], "FULLRESYNC", decode=False)
                 # After sending PSYNC, parse FULLRESYNC, RDB, and leftover commands
         def read_line(sock):
             line = b""
