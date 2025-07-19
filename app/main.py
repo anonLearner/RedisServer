@@ -468,11 +468,12 @@ def main():
 
     # Parse the leftover buffer as RESP
     try:
-        decoded = leftover.decode("utf-8", errors="replace")
+        decoded = leftover[:60].decode("utf-8", errors="replace")
         command, _ = parse_data(decoded)
         print(f"[DEBUG] Directly parsed leftover command: {command}")
         if command:
             send_command(master_socket, command, True)
+
     except Exception as e:
         print(f"[DEBUG] Failed to parse leftover buffer: {e}")
 
