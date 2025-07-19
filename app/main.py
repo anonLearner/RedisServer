@@ -260,7 +260,7 @@ def send_command(client_conn, response, replica):
                 resp = format_resp(replica_info)
     elif command == "replconf":
         if len(response) >= 3 and response[1].lower() == "getack" and response[2] == "*":
-            resp = format_resp(["REPLCONF", "ACK", "0"])
+            resp = format_resp(["REPLCONF", "ACK", f"{config.get('offset', 0)}"])
             client_conn.sendall(resp.encode("utf-8"))
             return  # Important: do not fall through and send again
         else:
