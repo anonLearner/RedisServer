@@ -463,7 +463,7 @@ def main():
         print(f"[DEBUG] RDB file received ({len(rdb_data)} bytes)")
 
         # 4. Read the rest (should be the next command, e.g. REPLCONF)
-        leftover = master_socket.recv(4096).lstrip("\r\n")
+        leftover = master_socket.recv(4096).lstrip(b"\r\n")
         print(f"[DEBUG] Leftover after RDB: {leftover[:60]}")
 
         print('[DEBUG] connection to master node is established, start handling client connections')
