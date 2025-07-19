@@ -324,17 +324,20 @@ def handle_client(client_conn, replica=False, initial_buffer=b""):
                 continue
 
             # For other RESP types, decode only as much as needed
+            # Find the next CRLF to get the command header
+            crlf = buffer.find(b"\r\n")
+            if crlf == -1:
+                break  # Incomplete header
             try:
-                decoded = buffer.decode("utf-8", errors="replace")
-                print(f"[DEBUG] Decoded buffer: {decoded[:60]}{'...' if len(decoded) > 60 else ''}")
+                decoded = buffer[:crlf+2].decode("utf-8", errors="replace")
             except Exception as e:
                 print(f"[DEBUG] Exception decoding buffer: {e}")
                 break
 
-            command, rest = parse_data(decoded)
+            command, rest = parse_data(buffer.decode("utf-8", errors="replace"))
             print(f"[DEBUG] Parsed command: {command}, rest length: {len(rest)}")
             if command is not None:
-                bytes_consumed = len(decoded) - len(rest)
+                bytes_consumed = len(buffer) - len(rest.encode("utf-8"))
                 print(f"[DEBUG] Calling send_command with: {command}")
                 send_command(client_conn, command, replica)
                 if replica:
