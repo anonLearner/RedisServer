@@ -494,7 +494,7 @@ def main():
     if args.dir and args.dbfilename:
         read_keys_from_rdb_file()
 
-    server_socket = socket.create_server(("localhost", config["port"]), reuse_port=True)
+    server_socket = socket.create_server(("", config["port"]), reuse_port=True)
     while True:
         conn, addr = server_socket.accept()  # wait for client
         print(f"[DEBUG] Accepted connection from {addr}")
