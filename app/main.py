@@ -501,9 +501,8 @@ def main():
         threading.Thread(
             target=handle_client, args=(master_socket, True, b""), daemon=True
         ).start()
-        if args.dir and args.dbfilename:
+    if args.dir and args.dbfilename:
             read_keys_from_rdb_file()
-
     
     while True:
         conn, addr = server_socket.accept()  # wait for client
