@@ -174,6 +174,7 @@ def start_replica_sync(command):
 
 
 def send_command(client_conn, response, replica):
+    print(f"received response to the replica: {response}")
     command = response[0].lower() if response and isinstance(response, list) and response[0] else None
     if command is None:
         resp = format_resp("Error: Unknown command")
