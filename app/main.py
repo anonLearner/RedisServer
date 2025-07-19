@@ -2,11 +2,7 @@ import threading
 import time
 import socket
 import argparse
-import sys
 
-def debug(msg):
-    sys.stderr.write(msg + "\n")
-    sys.stderr.flush()
 
 """
 In Redis serialization protocol,
@@ -290,64 +286,55 @@ def send_command(client_conn, response, replica):
     if (not replica) and (command != "psync"):
         client_conn.sendall(resp.encode("utf-8"))
 
+
 def handle_client(client_conn, replica=False):
     buffer = b""
     while True:
-        data = client_conn.recv(4096)
+        data = client_conn.recv(4096)  # Read as much as available
         if not data:
             break
         buffer += data
-
         while buffer:
+            # Handle RESP bulk string (RDB file or any binary data)
             if buffer.startswith(b"$"):
                 crlf = buffer.find(b"\r\n")
                 if crlf == -1:
-                    break
+                    break  # Incomplete header
                 try:
                     length = int(buffer[1:crlf])
                 except ValueError:
-                    break
-                total_len = crlf + 2 + length + 2
+                    break  # Malformed header
+                total_len = crlf + 2 + length + 2  # header + data + trailing \r\n
                 if len(buffer) < total_len:
-                    break
-                # We get full bulk string – likely the RDB dump
+                    break  # Wait for full data
+                # This is the RDB file or any bulk string
                 bulk_data = buffer[crlf+2:crlf+2+length]
                 if replica:
                     config["offset"] += total_len
                 buffer = buffer[total_len:]
-
-                # DEBUG LOGGING
-                debug(f"[replica] Received bulk, next buffer: {buffer[:200]!r}")
-
-                # Do not `continue` out of the outer `while buffer:` — let it loop naturally
-                # to pick up next RESP messages
                 continue
 
-            # DEBUG BEFORE PARSING ANYTHING
-            debug(f"[replica] About to parse buffer: {buffer[:200]!r}")
-
+            # For other RESP types, decode only as much as needed
+            # Try to parse a full RESP command from the buffer
             try:
                 decoded = buffer.decode("utf-8", errors="replace")
             except Exception:
-                break
+                break  # Wait for more data
+
             command, rest = parse_data(decoded)
-
-            if command is None:
+            if command is not None:
+                bytes_consumed = len(decoded) - len(rest)
+                send_command(client_conn, command, replica)
+                if replica:
+                    config["offset"] += bytes_consumed
+                buffer = buffer[bytes_consumed:]
+            else:
                 break
-
-            bytes_consumed = len(decoded) - len(rest)
-            debug(f"[replica] Parsed command: {command}; consumed {bytes_consumed} bytes")
-
-            send_command(client_conn, command, replica)
-            if replica:
-                config["offset"] += bytes_consumed
-            buffer = buffer[bytes_consumed:]
     client_conn.close()
-
 
 def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
-    debug("Logs from your program will appear here!")
+    print("Logs from your program will appear here!")
 
     # Parse command-line arguments for --dir, --dbfilename and --port
     parser = argparse.ArgumentParser()
@@ -400,7 +387,7 @@ def main():
     server_socket = socket.create_server(("localhost", config["port"]), reuse_port=True)
     while True:
         conn, addr = server_socket.accept()  # wait for client
-        debug(f"Accepted connection from {addr}")
+        print(f"Accepted connection from {addr}")
         # Handle each connection in a new thread
         threading.Thread(target=handle_client, args=(conn,), daemon=True).start()
 
