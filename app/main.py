@@ -309,27 +309,20 @@ def handle_client(client_conn, replica=False):
                     break  # Wait for full data
                 # This is the RDB file or any bulk string
                 bulk_data = buffer[crlf+2:crlf+2+length]
-                # Optionally process/store RDB file here if needed
                 if replica:
                     config["offset"] += total_len
                 buffer = buffer[total_len:]
                 continue
 
             # For other RESP types, decode only as much as needed
-            # Find the next CRLF to get the command header
-            crlf = buffer.find(b"\r\n")
-            if crlf == -1:
-                break  # Incomplete header
-            # Try to decode up to the next CRLF (safe for RESP commands)
             try:
-                decoded = buffer[:crlf+2].decode("utf-8", errors="replace")
+                decoded = buffer.decode("utf-8", errors="replace")
             except Exception:
                 break  # Wait for more data
 
-            # Try to parse the command using your string-based parse_data
-            command, rest = parse_data(buffer.decode("utf-8", errors="replace"))
+            command, rest = parse_data(decoded)
             if command is not None:
-                bytes_consumed = len(buffer) - len(rest.encode("utf-8"))
+                bytes_consumed = len(decoded) - len(rest)
                 send_command(client_conn, command, replica)
                 if replica:
                     config["offset"] += bytes_consumed
@@ -337,7 +330,6 @@ def handle_client(client_conn, replica=False):
             else:
                 break
     client_conn.close()
-
 
 def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
