@@ -5,11 +5,8 @@ import argparse
 import sys
 
 def debug(msg):
-    """
-    Debug function to print messages to stderr.
-    This can be used for debugging purposes.
-    """
-    print(f"[DEBUG] {msg}", file=sys.stderr)
+    sys.stderr.write(msg + "\n")
+    sys.stderr.flush()
 
 """
 In Redis serialization protocol,
