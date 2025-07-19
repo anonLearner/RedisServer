@@ -435,9 +435,40 @@ def main():
 
         send_to_master_node(master_socket, ["PSYNC", "?", "-1"], "FULLRESYNC", decode=False)
 
-        master_socket.recv(1024)
-        master_socket.recv(1024)
-        leftover = master_socket.recv(1024)
+                # After sending PSYNC, parse FULLRESYNC, RDB, and leftover commands
+        def read_line(sock):
+            line = b""
+            while not line.endswith(b"\r\n"):
+                chunk = sock.recv(1)
+                if not chunk:
+                    break
+                line += chunk
+            return line
+
+        # 1. Read FULLRESYNC line
+        fullresync_line = read_line(master_socket)
+        print(f"[DEBUG] FULLRESYNC line: {fullresync_line}")
+        # Optionally parse and handle this line
+
+        # 2. Read RDB bulk string header
+        rdb_header = read_line(master_socket)
+        print(f"[DEBUG] RDB header: {rdb_header}")
+        if not rdb_header.startswith(b"$"):
+            raise Exception("Expected RDB bulk string header")
+        rdb_len = int(rdb_header[1:-2])  # skip $ and \r\n
+
+        # 3. Read RDB file (exactly rdb_len bytes + trailing \r\n)
+        rdb_data = b""
+        while len(rdb_data) < rdb_len + 2:
+            chunk = master_socket.recv(rdb_len + 2 - len(rdb_data))
+            if not chunk:
+                break
+            rdb_data += chunk
+        print(f"[DEBUG] RDB file received ({len(rdb_data)} bytes)")
+
+        # 4. Read the rest (should be the next command, e.g. REPLCONF)
+        leftover = master_socket.recv(4096)
+        print(f"[DEBUG] Leftover after RDB: {leftover[:60]}")
 
         print('[DEBUG] connection to master node is established, start handling client connections')
         threading.Thread(
