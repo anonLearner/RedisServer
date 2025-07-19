@@ -345,10 +345,11 @@ def handle_client(client_conn, replica=False, initial_buffer=b""):
                 if command is not None:
                     bytes_consumed = len(decoded) - len(rest)
                     print(f"[DEBUG] Parsed array command: {command}")
-                    send_command(client_conn, command, replica)
                     if replica:
                         config["offset"] += bytes_consumed
                         print(f"[DEBUG] Updated replica offset: {config['offset']}")
+                    send_command(client_conn, command, replica)
+                    
                     buffer = buffer[bytes_consumed:]
                     continue
                 else:
@@ -453,30 +454,24 @@ def main():
             raise Exception("Expected RDB bulk string header")
         rdb_len = int(rdb_header[1:-2])  # skip $ and \r\n
 
-        # 3. Read RDB file (exactly rdb_len bytes)
-        rdb_data = b""
-        while len(rdb_data) < rdb_len:
-            chunk = master_socket.recv(rdb_len - len(rdb_data))
+        # 3. Read RDB file (exactly rdb_len bytes + trailing \r\n)
+        rdb_and_extra = b""
+        while len(rdb_and_extra) < rdb_len + 2:
+            chunk = master_socket.recv(rdb_len + 2 - len(rdb_and_extra))
             if not chunk:
                 break
-            rdb_data += chunk
+            rdb_and_extra += chunk
 
-        # 4. Read trailing CRLF (2 bytes)
-        trailing_crlf = b""
-        while len(trailing_crlf) < 2:
-            chunk = master_socket.recv(2 - len(trailing_crlf))
-            if not chunk:
-                break
-            trailing_crlf += chunk
+        # Split out the RDB data and trailing CRLF
+        rdb_data = rdb_and_extra[:rdb_len]
+        trailing_crlf = rdb_and_extra[rdb_len:rdb_len+2]
+        leftover = rdb_and_extra[rdb_len:]  # This may be empty or may contain part/all of the next command
 
-        # 5. Now read the next RESP command(s)
-        leftover = b""
-        # Read enough to get at least a RESP header
-        while len(leftover) < 4 or not (leftover.startswith(b"*") or leftover.startswith(b"$") or leftover.startswith(b"+") or leftover.startswith(b"-") or leftover.startswith(b":")):
-            chunk = master_socket.recv(4096)
-            if not chunk:
-                break
-            leftover += chunk
+        # Now read more if needed for leftover (to ensure we have the full next command)
+        if len(leftover) < 4 or not (leftover.startswith(b"*") or leftover.startswith(b"$") or leftover.startswith(b"+") or leftover.startswith(b"-") or leftover.startswith(b":")):
+            # Try to read more if we don't have a full RESP header yet
+            more = master_socket.recv(4096)
+            leftover += more
 
         print(f"[DEBUG] RDB file received ({len(rdb_data)} bytes)")
         print(f"[DEBUG] Leftover after RDB: {leftover[:60]}")
