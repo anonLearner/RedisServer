@@ -296,9 +296,9 @@ def handle_client(client_conn, replica=False, initial_buffer=b""):
             print("[DEBUG] No data and buffer empty, closing connection.")
             break
         buffer += data
-        while buffer:
+                while buffer:
             print(f"[DEBUG] Buffer length: {len(buffer)}")
-            # Handle RESP bulk string (RDB file or any binary data)
+            # RESP Bulk String (RDB file or any binary data)
             if buffer.startswith(b"$"):
                 crlf = buffer.find(b"\r\n")
                 print(f"[DEBUG] Bulk string detected, crlf at {crlf}")
@@ -323,31 +323,63 @@ def handle_client(client_conn, replica=False, initial_buffer=b""):
                 buffer = buffer[total_len:]
                 continue
 
-            # Handle RESP simple string, array, etc.
-            # Only decode as much as needed for the next command
-            # Find the next CRLF to get the command header
-            crlf = buffer.find(b"\r\n")
-            if crlf == -1:
-                break  # Incomplete header
-            try:
-                decoded = buffer.decode("utf-8", errors="replace")
-            except Exception as e:
-                print(f"[DEBUG] Exception decoding buffer: {e}")
-                break
+            # RESP Array (for commands like REPLCONF GETACK *)
+            if buffer.startswith(b"*"):
+                # Find the end of the array by parsing as much as possible
+                try:
+                    decoded = buffer.decode("utf-8", errors="replace")
+                except Exception as e:
+                    print(f"[DEBUG] Exception decoding buffer: {e}")
+                    break
+                command, rest = parse_data(decoded)
+                if command is not None:
+                    bytes_consumed = len(decoded) - len(rest)
+                    print(f"[DEBUG] Parsed array command: {command}")
+                    send_command(client_conn, command, replica)
+                    if replica:
+                        config["offset"] += bytes_consumed
+                        print(f"[DEBUG] Updated replica offset: {config['offset']}")
+                    buffer = buffer[bytes_consumed:]
+                    continue
+                else:
+                    print("[DEBUG] Incomplete array command, waiting for more data.")
+                    break
 
-            command, rest = parse_data(decoded)
-            print(f"[DEBUG] Parsed command: {command}, rest length: {len(rest)}")
-            if command is not None:
-                bytes_consumed = len(decoded) - len(rest)
-                print(f"[DEBUG] Calling send_command with: {command}")
-                send_command(client_conn, command, replica)
-                if replica:
-                    config["offset"] += bytes_consumed
-                    print(f"[DEBUG] Updated replica offset: {config['offset']}")
-                buffer = buffer[bytes_consumed:]
-            else:
-                print("[DEBUG] Incomplete command, waiting for more data.")
-                break
+            # RESP Simple String
+            if buffer.startswith(b"+"):
+                crlf = buffer.find(b"\r\n")
+                if crlf == -1:
+                    break
+                line = buffer[1:crlf].decode("utf-8", errors="replace")
+                print(f"[DEBUG] Parsed simple string: {line}")
+                send_command(client_conn, [line], replica)
+                buffer = buffer[crlf+2:]
+                continue
+
+            # RESP Integer
+            if buffer.startswith(b":"):
+                crlf = buffer.find(b"\r\n")
+                if crlf == -1:
+                    break
+                num = int(buffer[1:crlf])
+                print(f"[DEBUG] Parsed integer: {num}")
+                send_command(client_conn, [num], replica)
+                buffer = buffer[crlf+2:]
+                continue
+
+            # RESP Error
+            if buffer.startswith(b"-"):
+                crlf = buffer.find(b"\r\n")
+                if crlf == -1:
+                    break
+                err = buffer[1:crlf].decode("utf-8", errors="replace")
+                print(f"[DEBUG] Parsed error: {err}")
+                send_command(client_conn, [f"Error: {err}"], replica)
+                buffer = buffer[crlf+2:]
+                continue
+
+            print("[DEBUG] Unrecognized or incomplete RESP type, waiting for more data.")
+            break
     print("[DEBUG] Closing client connection.")
     client_conn.close()
 
