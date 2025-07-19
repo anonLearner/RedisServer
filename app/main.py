@@ -307,12 +307,13 @@ def handle_client(client_conn, replica=False):
                 total_len = crlf + 2 + length + 2  # header + data + trailing \r\n
                 if len(buffer) < total_len:
                     break  # Wait for full data
-                # This is the RDB file or any bulk string
                 bulk_data = buffer[crlf+2:crlf+2+length]
                 if replica:
                     config["offset"] += total_len
                 buffer = buffer[total_len:]
-                continue
+                # DO NOT continue here — let the loop continue to parse next RESP commands
+                continue  # <-- safe to continue now that buffer is trimmed
+
 
             # For other RESP types, decode only as much as needed
             try:
