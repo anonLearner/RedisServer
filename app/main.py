@@ -288,9 +288,9 @@ def send_command(client_conn, response, replica):
         client_conn.sendall(resp.encode("utf-8"))
 
 
-def handle_client(client_conn, replica=False):
+def handle_client(client_conn, replica=False, initial_buffer=b""):
     print(f"[DEBUG] Handling client connection: {client_conn}, replica={replica}")
-    buffer = b""
+    buffer = initial_buffer
     while True:
         data = client_conn.recv(4096)
         print(f"[DEBUG] Received {len(data)} bytes: {data[:60]}{'...' if len(data) > 60 else ''}")
@@ -377,12 +377,16 @@ def main():
             conn.send(format_resp(data).encode("utf-8"))
             response = conn.recv(4028)
             if decode:
-                response = response.decode("utf-8")
-                parsed, _ = parse_data(response)
+                response_str = response.decode("utf-8")
+                parsed, _ = parse_data(response_str)
                 if wait_for_cmd not in str(parsed):
                     raise Exception(
-                        f"Expected response '{wait_for_cmd}', but got '{response}'"
+                        f"Expected response '{wait_for_cmd}', but got '{response_str}'"
                     )
+                return b""  # No leftover bytes
+            else:
+                # For PSYNC, return the raw bytes (could include RDB and next command)
+                return response
 
         config["replicaof"] = args.replicaof.split()
         master_socket = socket.create_connection(
@@ -391,10 +395,11 @@ def main():
         send_to_master_node(master_socket, ["PING"], "PONG")
         send_to_master_node(master_socket, ["REPLCONF", "listening-port", str(config["port"])], "OK"      )
         send_to_master_node(master_socket, ["REPLCONF", "capa", "psync2"], "OK")
-        send_to_master_node(master_socket, ["PSYNC", "?", "-1"], "FULLRESYNC", decode=False)
+
+        leftover = send_to_master_node(master_socket, ["PSYNC", "?", "-1"], "FULLRESYNC", decode=False)
         print('connection to master node is established, start handling client connections')
         threading.Thread(
-            target=handle_client, args=(master_socket, True), daemon=True
+            target=handle_client, args=(master_socket, True, leftover), daemon=True
         ).start()
 
     if args.dir and args.dbfilename:
