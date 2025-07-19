@@ -497,12 +497,12 @@ def main():
                 print(f"[DEBUG] Failed to parse leftover buffer: {e}")
                 break
 
-    print('[DEBUG] connection to master node is established, start handling client connections')
-    threading.Thread(
-        target=handle_client, args=(master_socket, True, b""), daemon=True
-    ).start()
-    if args.dir and args.dbfilename:
-        read_keys_from_rdb_file()
+        print('[DEBUG] connection to master node is established, start handling client connections')
+        threading.Thread(
+            target=handle_client, args=(master_socket, True, b""), daemon=True
+        ).start()
+        if args.dir and args.dbfilename:
+            read_keys_from_rdb_file()
 
     
     while True:
