@@ -296,7 +296,7 @@ def handle_client(client_conn, replica=False, initial_buffer=b""):
             print("[DEBUG] No data and buffer empty, closing connection.")
             break
         buffer += data
-                while buffer:
+        while buffer:
             print(f"[DEBUG] Buffer length: {len(buffer)}")
             # RESP Bulk String (RDB file or any binary data)
             if buffer.startswith(b"$"):
