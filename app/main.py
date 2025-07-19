@@ -466,11 +466,28 @@ def main():
         leftover = master_socket.recv(4096).lstrip(b"\r\n")
         print(f"[DEBUG] Leftover after RDB: {leftover[:60]}")
 
+        # Handle leftover RESP commands immediately
+        buffer = leftover
+        while buffer:
+            try:
+                decoded = buffer.decode("utf-8", errors="replace")
+                command, rest = parse_data(decoded)
+                if command is not None:
+                    bytes_consumed = len(decoded) - len(rest)
+                    print(f"[DEBUG] Parsed leftover command: {command}")
+                    send_command(master_socket, command, True)
+                    buffer = buffer[bytes_consumed:]
+                else:
+                    print("[DEBUG] Incomplete leftover command, waiting for more data.")
+                    break
+            except Exception as e:
+                print(f"[DEBUG] Exception parsing leftover buffer: {e}")
+                break
+
         print('[DEBUG] connection to master node is established, start handling client connections')
         threading.Thread(
-            target=handle_client, args=(master_socket, True, leftover), daemon=True
+            target=handle_client, args=(master_socket, True, b""), daemon=True
         ).start()
-
     if args.dir and args.dbfilename:
         read_keys_from_rdb_file()
 
