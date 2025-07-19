@@ -480,22 +480,22 @@ def main():
 
     # Parse the leftover buffer as RESP
     # Parse and handle all RESP commands in the leftover buffer
-    buffer = leftover
-    while buffer:
-        try:
-            decoded = buffer.decode("utf-8", errors="replace")
-            command, rest = parse_data(decoded)
-            if command is not None:
-                bytes_consumed = len(decoded) - len(rest)
-                print(f"[DEBUG] Directly parsed leftover command: {command}")
-                send_command(master_socket, command, True)
-                buffer = buffer[bytes_consumed:]
-            else:
-                print("[DEBUG] Incomplete leftover command, waiting for more data.")
+        buffer = leftover
+        while buffer:
+            try:
+                decoded = buffer.decode("utf-8", errors="replace")
+                command, rest = parse_data(decoded)
+                if command is not None:
+                    bytes_consumed = len(decoded) - len(rest)
+                    print(f"[DEBUG] Directly parsed leftover command: {command}")
+                    send_command(master_socket, command, True)
+                    buffer = buffer[bytes_consumed:]
+                else:
+                    print("[DEBUG] Incomplete leftover command, waiting for more data.")
+                    break
+            except Exception as e:
+                print(f"[DEBUG] Failed to parse leftover buffer: {e}")
                 break
-        except Exception as e:
-            print(f"[DEBUG] Failed to parse leftover buffer: {e}")
-            break
 
     print('[DEBUG] connection to master node is established, start handling client connections')
     threading.Thread(
