@@ -174,7 +174,7 @@ def start_replica_sync(command):
 
 
 def send_command(client_conn, response, replica):
-    print(f"received response to the replica: {response}")
+    print(f"[DEBUG] send_command called with response: {response}, replica: {replica}")
     command = response[0].lower() if response and isinstance(response, list) and response[0] else None
     if command is None:
         resp = format_resp("Error: Unknown command")
@@ -191,18 +191,14 @@ def send_command(client_conn, response, replica):
         else:
             key = response[1]
             value = response[2]
-            # If there are more than 3 arguments, check for PX/EX
             if len(response) > 3:
                 option = response[3].lower()
                 if option == "px" and len(response) > 4:
-                    # Store expiration as absolute time in ms
                     expiration_time = int(response[4])
                     expiration_times[key] = time.time() * 1000 + expiration_time
                 elif option == "ex" and len(response) > 4:
-                    # seconds are given, convert to ms
                     expiration_time = int(response[4]) * 1000
                     expiration_times[key] = time.time() * 1000 + expiration_time
-            # Store the key-value pair
             data_in_memory[key] = value
             start_replica_sync(response)
             resp = format_resp("OK")
@@ -262,8 +258,9 @@ def send_command(client_conn, response, replica):
     elif command == "replconf":
         if len(response) >= 3 and response[1].lower() == "getack" and response[2] == "*":
             resp = format_resp(["REPLCONF", "ACK", f"{config.get('offset', 0)}"])
+            print(f"[DEBUG] Sending REPLCONF ACK: {resp.strip()}")
             client_conn.sendall(resp.encode("utf-8"))
-            return  # Important: do not fall through and send again
+            return
         else:
             resp = format_resp("OK")
             if not replica:
@@ -280,22 +277,23 @@ def send_command(client_conn, response, replica):
             + b"\r\n"
             + bytes.fromhex(empty_rdb_hex)
         )
-
     else:
         resp = format_resp("Error: Unknown command")
 
     if (not replica) and (command != "psync"):
+        print(f"[DEBUG] Sending response to client: {resp.strip()}")
         client_conn.sendall(resp.encode("utf-8"))
 
-
 def handle_client(client_conn, replica=False, initial_buffer=b""):
-    print(f"[DEBUG] Handling client connection: {client_conn}, replica={replica}")
+    print(f"[DEBUG] handle_client started. Replica: {replica}")
     buffer = initial_buffer
+    if buffer:
+        print(f"[DEBUG] Initial buffer length: {len(buffer)}")
     while True:
         data = client_conn.recv(4096)
-        print(f"[DEBUG] Received {len(data)} bytes: {data[:60]}{'...' if len(data) > 60 else ''}")
-        if not data:
-            print("[DEBUG] No data received, closing connection.")
+        print(f"[DEBUG] Received {len(data)} bytes from socket")
+        if not data and not buffer:
+            print("[DEBUG] No data and buffer empty, closing connection.")
             break
         buffer += data
         while buffer:
@@ -317,8 +315,8 @@ def handle_client(client_conn, replica=False, initial_buffer=b""):
                 if len(buffer) < total_len:
                     print("[DEBUG] Incomplete bulk string data, waiting for more data.")
                     break
-                bulk_data = buffer[crlf+2:crlf+2+length]
-                print(f"[DEBUG] Bulk string data received ({len(bulk_data)} bytes)")
+                rdb_data = buffer[crlf+2:crlf+2+length]
+                print(f"[DEBUG] Bulk string data received ({len(rdb_data)} bytes)")
                 if replica:
                     config["offset"] += total_len
                     print(f"[DEBUG] Updated replica offset: {config['offset']}")
@@ -374,11 +372,14 @@ def main():
     else:
         config["offset"] = 0
         def send_to_master_node(conn, data, wait_for_cmd="OK", decode=True):
+            print(f"[DEBUG] Sending to master: {data}")
             conn.send(format_resp(data).encode("utf-8"))
             response = conn.recv(4028)
+            print(f"[DEBUG] Received {len(response)} bytes from master")
             if decode:
                 response_str = response.decode("utf-8")
                 parsed, _ = parse_data(response_str)
+                print(f"[DEBUG] Parsed master response: {parsed}")
                 if wait_for_cmd not in str(parsed):
                     raise Exception(
                         f"Expected response '{wait_for_cmd}', but got '{response_str}'"
@@ -386,6 +387,7 @@ def main():
                 return b""  # No leftover bytes
             else:
                 # For PSYNC, return the raw bytes (could include RDB and next command)
+                print(f"[DEBUG] Returning leftover bytes ({len(response)}) after PSYNC")
                 return response
 
         config["replicaof"] = args.replicaof.split()
@@ -393,11 +395,11 @@ def main():
             (config["replicaof"][0], int(config["replicaof"][1]))
         )
         send_to_master_node(master_socket, ["PING"], "PONG")
-        send_to_master_node(master_socket, ["REPLCONF", "listening-port", str(config["port"])], "OK"      )
+        send_to_master_node(master_socket, ["REPLCONF", "listening-port", str(config["port"])], "OK")
         send_to_master_node(master_socket, ["REPLCONF", "capa", "psync2"], "OK")
 
         leftover = send_to_master_node(master_socket, ["PSYNC", "?", "-1"], "FULLRESYNC", decode=False)
-        print('connection to master node is established, start handling client connections')
+        print('[DEBUG] connection to master node is established, start handling client connections')
         threading.Thread(
             target=handle_client, args=(master_socket, True, leftover), daemon=True
         ).start()
@@ -408,10 +410,8 @@ def main():
     server_socket = socket.create_server(("localhost", config["port"]), reuse_port=True)
     while True:
         conn, addr = server_socket.accept()  # wait for client
-        print(f"Accepted connection from {addr}")
-        # Handle each connection in a new thread
+        print(f"[DEBUG] Accepted connection from {addr}")
         threading.Thread(target=handle_client, args=(conn,), daemon=True).start()
-
 
 if __name__ == "__main__":
     main()
