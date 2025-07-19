@@ -454,21 +454,33 @@ def main():
         rdb_len = int(rdb_header[1:-2])  # skip $ and \r\n
 
         # 3. Read RDB file (exactly rdb_len bytes + trailing \r\n)
-        rdb_data = b""
-        while len(rdb_data) < rdb_len + 2:
-            chunk = master_socket.recv(rdb_len + 2 - len(rdb_data))
+        rdb_and_extra = b""
+        while len(rdb_and_extra) < rdb_len + 2:
+            chunk = master_socket.recv(rdb_len + 2 - len(rdb_and_extra))
             if not chunk:
                 break
-            rdb_data += chunk
-        print(f"[DEBUG] RDB file received ({len(rdb_data)} bytes)")
+            rdb_and_extra += chunk
 
-        # 4. Read the rest (should be the next command, e.g. REPLCONF)
-    leftover = master_socket.recv(4096).lstrip(b"\r\n")
-    print(f"[DEBUG] Leftover after RDB: {leftover[:60]}")
+        # If we read more than needed, save the extra for leftover
+        if len(rdb_and_extra) > rdb_len + 2:
+            rdb_data = rdb_and_extra[:rdb_len]
+            trailing_crlf = rdb_and_extra[rdb_len:rdb_len+2]
+            leftover = rdb_and_extra[rdb_len+2:]
+        else:
+            rdb_data = rdb_and_extra[:rdb_len]
+            trailing_crlf = rdb_and_extra[rdb_len:rdb_len+2]
+            leftover = b""
+
+        # Now read more if needed for leftover
+        if not leftover:
+            leftover = master_socket.recv(4096)
+
+        print(f"[DEBUG] RDB file received ({len(rdb_data)} bytes)")
+        print(f"[DEBUG] Leftover after RDB: {leftover[:60]}")
 
     # Parse the leftover buffer as RESP
     try:
-        decoded = leftover[:60].decode("utf-8", errors="replace")
+        decoded = leftover.decode("utf-8", errors="replace")
         command, _ = parse_data(decoded)
         print(f"[DEBUG] Directly parsed leftover command: {command}")
         if command:
