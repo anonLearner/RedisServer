@@ -168,6 +168,7 @@ def start_replica_sync(command):
     if REPLICA_NODES:
         for replica in REPLICA_NODES:
             try:
+                print(f"[DEBUG] Sending command to replica: {command}")
                 replica.sendall(format_resp(command).encode("utf-8"))
             except Exception as e:
                 print(f"Error sending command to replica: {e}")
