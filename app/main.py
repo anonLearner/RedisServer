@@ -461,19 +461,16 @@ def main():
                 break
             rdb_and_extra += chunk
 
-        # If we read more than needed, save the extra for leftover
-        if len(rdb_and_extra) > rdb_len + 2:
-            rdb_data = rdb_and_extra[:rdb_len]
-            trailing_crlf = rdb_and_extra[rdb_len:rdb_len+2]
-            leftover = rdb_and_extra[rdb_len+2:]
-        else:
-            rdb_data = rdb_and_extra[:rdb_len]
-            trailing_crlf = rdb_and_extra[rdb_len:rdb_len+2]
-            leftover = b""
+        # Split out the RDB data and trailing CRLF
+        rdb_data = rdb_and_extra[:rdb_len]
+        trailing_crlf = rdb_and_extra[rdb_len:rdb_len+2]
+        leftover = rdb_and_extra[rdb_len+2:]  # This may be empty or may contain part/all of the next command
 
-        # Now read more if needed for leftover
-        if not leftover:
-            leftover = master_socket.recv(4096)
+        # Now read more if needed for leftover (to ensure we have the full next command)
+        if len(leftover) < 4 or not (leftover.startswith(b"*") or leftover.startswith(b"$") or leftover.startswith(b"+") or leftover.startswith(b"-") or leftover.startswith(b":")):
+            # Try to read more if we don't have a full RESP header yet
+            more = master_socket.recv(4096)
+            leftover += more
 
         print(f"[DEBUG] RDB file received ({len(rdb_data)} bytes)")
         print(f"[DEBUG] Leftover after RDB: {leftover[:60]}")
