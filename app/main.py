@@ -433,8 +433,7 @@ def main():
         send_to_master_node(master_socket, ["REPLCONF", "listening-port", str(config["port"])], "OK")
         send_to_master_node(master_socket, ["REPLCONF", "capa", "psync2"], "OK")
 
-        send_to_master_node(master_socket, ["PSYNC", "?", "-1"], "FULLRESYNC", decode=False)
-
+        send_to_master_node(master_socket, ["PSYNC", "?", "-1"], "FULLRESYNC")
                 # After sending PSYNC, parse FULLRESYNC, RDB, and leftover commands
         def read_line(sock):
             line = b""
