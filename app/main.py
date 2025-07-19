@@ -288,6 +288,7 @@ def send_command(client_conn, response, replica):
 
 
 def handle_client(client_conn, replica=False):
+    print(f"Handling client connection: {client_conn}")
     buffer = b""
     while True:
         data = client_conn.recv(4096)  # Read as much as available
@@ -333,7 +334,6 @@ def handle_client(client_conn, replica=False):
     client_conn.close()
 
 def main():
-    # You can use print statements as follows for debugging, they'll be visible when running tests.
     print("Logs from your program will appear here!")
 
     # Parse command-line arguments for --dir, --dbfilename and --port
@@ -376,7 +376,7 @@ def main():
         send_to_master_node(master_socket, ["REPLCONF", "listening-port", str(config["port"])], "OK"      )
         send_to_master_node(master_socket, ["REPLCONF", "capa", "psync2"], "OK")
         send_to_master_node(master_socket, ["PSYNC", "?", "-1"], "FULLRESYNC", decode=False)
-        # connection to master node is established, start handling client connections
+        print('connection to master node is established, start handling client connections')
         threading.Thread(
             target=handle_client, args=(master_socket, True), daemon=True
         ).start()
