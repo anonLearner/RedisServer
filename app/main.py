@@ -296,7 +296,7 @@ def handle_client(client_conn, replica=False, initial_buffer=b""):
             print("[DEBUG] No data and buffer empty, closing connection.")
             break
         buffer += data
-        while buffer:
+                while buffer:
             print(f"[DEBUG] Buffer length: {len(buffer)}")
             # Handle RESP bulk string (RDB file or any binary data)
             if buffer.startswith(b"$"):
@@ -323,21 +323,22 @@ def handle_client(client_conn, replica=False, initial_buffer=b""):
                 buffer = buffer[total_len:]
                 continue
 
-            # For other RESP types, decode only as much as needed
+            # Handle RESP simple string, array, etc.
+            # Only decode as much as needed for the next command
             # Find the next CRLF to get the command header
             crlf = buffer.find(b"\r\n")
             if crlf == -1:
                 break  # Incomplete header
             try:
-                decoded = buffer[:crlf+2].decode("utf-8", errors="replace")
+                decoded = buffer.decode("utf-8", errors="replace")
             except Exception as e:
                 print(f"[DEBUG] Exception decoding buffer: {e}")
                 break
 
-            command, rest = parse_data(buffer.decode("utf-8", errors="replace"))
+            command, rest = parse_data(decoded)
             print(f"[DEBUG] Parsed command: {command}, rest length: {len(rest)}")
             if command is not None:
-                bytes_consumed = len(buffer) - len(rest.encode("utf-8"))
+                bytes_consumed = len(decoded) - len(rest)
                 print(f"[DEBUG] Calling send_command with: {command}")
                 send_command(client_conn, command, replica)
                 if replica:
