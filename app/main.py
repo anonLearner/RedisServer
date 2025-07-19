@@ -286,7 +286,6 @@ def send_command(client_conn, response, replica):
     if (not replica) and (command != "psync"):
         client_conn.sendall(resp.encode("utf-8"))
 
-
 def handle_client(client_conn, replica=False):
     buffer = b""
     while True:
@@ -294,43 +293,53 @@ def handle_client(client_conn, replica=False):
         if not data:
             break
         buffer += data
+
         while buffer:
-            # Handle RESP bulk string (RDB file or any binary data)
             if buffer.startswith(b"$"):
                 crlf = buffer.find(b"\r\n")
                 if crlf == -1:
-                    break  # Incomplete header
+                    break
                 try:
                     length = int(buffer[1:crlf])
                 except ValueError:
-                    break  # Malformed header
-                total_len = crlf + 2 + length + 2  # header + data + trailing \r\n
+                    break
+                total_len = crlf + 2 + length + 2
                 if len(buffer) < total_len:
-                    break  # Wait for full data
+                    break
+                # We get full bulk string – likely the RDB dump
                 bulk_data = buffer[crlf+2:crlf+2+length]
                 if replica:
                     config["offset"] += total_len
                 buffer = buffer[total_len:]
-                # DO NOT continue here — let the loop continue to parse next RESP commands
-                continue  # <-- safe to continue now that buffer is trimmed
 
+                # DEBUG LOGGING
+                print(f"[replica] Received bulk, next buffer: {buffer[:200]!r}")
 
-            # For other RESP types, decode only as much as needed
+                # Do not `continue` out of the outer `while buffer:` — let it loop naturally
+                # to pick up next RESP messages
+                continue
+
+            # DEBUG BEFORE PARSING ANYTHING
+            print(f"[replica] About to parse buffer: {buffer[:200]!r}")
+
             try:
                 decoded = buffer.decode("utf-8", errors="replace")
             except Exception:
-                break  # Wait for more data
-
-            command, rest = parse_data(decoded)
-            if command is not None:
-                bytes_consumed = len(decoded) - len(rest)
-                send_command(client_conn, command, replica)
-                if replica:
-                    config["offset"] += bytes_consumed
-                buffer = buffer[bytes_consumed:]
-            else:
                 break
+            command, rest = parse_data(decoded)
+
+            if command is None:
+                break
+
+            bytes_consumed = len(decoded) - len(rest)
+            print(f"[replica] Parsed command: {command}; consumed {bytes_consumed} bytes")
+
+            send_command(client_conn, command, replica)
+            if replica:
+                config["offset"] += bytes_consumed
+            buffer = buffer[bytes_consumed:]
     client_conn.close()
+
 
 def main():
     # You can use print statements as follows for debugging, they'll be visible when running tests.
