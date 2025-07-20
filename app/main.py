@@ -278,6 +278,19 @@ def send_command(client_conn, response, replica):
             + b"\r\n"
             + bytes.fromhex(empty_rdb_hex)
         )
+    elif command == "wait":
+        if len(response) < 3:
+            resp = format_resp("Error: WAIT command requires a number of replicas and a timeout")
+        else:
+            # num_replicas = int(response[1])
+            # timeout = int(response[2])
+            # start_time = time.time()
+            # while time.time() - start_time < timeout:
+            #     if len(REPLICA_NODES) >= num_replicas:
+            #         resp = format_resp("OK")
+            #         break
+            #     time.sleep(0.1)
+            resp = format_resp("0")
     else:
         resp = format_resp("Error: Unknown command")
 
