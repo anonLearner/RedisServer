@@ -275,6 +275,7 @@ def send_command(client_conn, response, replica):
             try:
                 ack_offset = int(response[2])
                 REPLICA_ACKS[client_conn] = ack_offset
+                print(f"[DEBUG] Updated REPLICA_ACKS (from send_command): {REPLICA_ACKS}")
             except Exception:
                 pass
     
@@ -300,62 +301,49 @@ def send_command(client_conn, response, replica):
         )
     
     elif command == "wait":
-        import select
+        print(f"[DEBUG][WAIT] Received WAIT command: {response}")
         if len(response) < 3:
             resp = format_resp("Error: WAIT command requires a number of replicas and a timeout")
         else:
             num_replicas = int(response[1])
             timeout = int(response[2]) / 1000.0  # ms to seconds
+            print(f"[DEBUG][WAIT] num_replicas={num_replicas}, timeout={timeout}s, GLOBAL_OFFSET={GLOBAL_OFFSET}")
 
             if GLOBAL_OFFSET == 0:
                 resp = format_resp(len(REPLICA_NODES))
+                print(f"[DEBUG][WAIT] No writes yet, returning connected replicas: {len(REPLICA_NODES)}")
             else:
                 start_time = time.time()
                 target_offset = GLOBAL_OFFSET
+                print(f"[DEBUG][WAIT] Waiting for offset: {target_offset}")
 
-                # DO NOT REMOVE OLD ACKS!
+                # Ask all replicas to send their ACKs
                 for replica in REPLICA_NODES:
                     try:
                         msg = format_resp(["REPLCONF", "GETACK", "*"])
-                        print(f"[DEBUG] Sending REPLCONF GETACK * to replica")
+                        print(f"[DEBUG][WAIT] Sending REPLCONF GETACK * to replica {replica.getpeername()}")
                         replica.sendall(msg.encode("utf-8"))
                     except Exception as e:
-                        print(f"[DEBUG] Failed to send REPLCONF GETACK *: {e}")
+                        print(f"[DEBUG][WAIT] Failed to send REPLCONF GETACK *: {e}")
 
+                # Poll REPLICA_ACKS until enough replicas have acknowledged or timeout
                 while True:
-                    if REPLICA_NODES:
-                        rlist, _, _ = select.select(REPLICA_NODES, [], [], 0.05)
-                        for sock in rlist:
-                            try:
-                                data = sock.recv(4096)
-                                if data:
-                                    try:
-                                        decoded = data.decode("utf-8", errors="replace")
-                                        cmd, _ = parse_data(decoded)
-                                        if (
-                                            isinstance(cmd, list)
-                                            and len(cmd) >= 3
-                                            and str(cmd[0]).upper() == "REPLCONF"
-                                            and str(cmd[1]).upper() == "ACK"
-                                        ):
-                                            ack_offset = int(cmd[2])
-                                            REPLICA_ACKS[sock] = ack_offset
-                                            print(f"[DEBUG] Updated REPLICA_ACKS: {REPLICA_ACKS}")
-                                    except Exception as e:
-                                        print(f"[DEBUG] Failed to parse REPLCONF ACK: {e}")
-                            except Exception as e:
-                                print(f"[DEBUG] Error reading from replica: {e}")
-
-                    # Count all replicas that have acknowledged at least target_offset
+                    elapsed = time.time() - start_time
                     acknowledged = sum(1 for ack in REPLICA_ACKS.values() if ack >= target_offset)
+                    print(f"[DEBUG][WAIT] Replicas acknowledged offset {target_offset}: {acknowledged}/{num_replicas}")
                     if acknowledged >= num_replicas:
+                        print(f"[DEBUG][WAIT] Required replicas acknowledged, breaking loop.")
                         break
-                    if timeout > 0 and (time.time() - start_time) >= timeout:
+                    if timeout > 0 and elapsed >= timeout:
+                        print(f"[DEBUG][WAIT] Timeout reached ({timeout}s), breaking loop.")
                         break
+                    time.sleep(0.05)  # Sleep briefly to avoid busy waiting
 
                 resp = format_resp(acknowledged)
-        print(f"[DEBUG] Sending response to client: {resp.strip()}")
+                print(f"[DEBUG][WAIT] Final acknowledged count: {acknowledged}")
+        print(f"[DEBUG][WAIT] Sending response to client: {resp.strip()}")
         client_conn.sendall(resp.encode("utf-8"))
+        return
     else:
         resp = format_resp("Error: Unknown command")
 
