@@ -313,11 +313,7 @@ def send_command(client_conn, response, replica):
                 start_time = time.time()
                 target_offset = GLOBAL_OFFSET
 
-                # Remove ACKs for previous offsets
-                for sock in list(REPLICA_ACKS.keys()):
-                    if REPLICA_ACKS[sock] < target_offset:
-                        del REPLICA_ACKS[sock]
-
+                # DO NOT REMOVE OLD ACKS!
                 for replica in REPLICA_NODES:
                     try:
                         msg = format_resp(["REPLCONF", "GETACK", "*"])
@@ -350,6 +346,7 @@ def send_command(client_conn, response, replica):
                             except Exception as e:
                                 print(f"[DEBUG] Error reading from replica: {e}")
 
+                    # Count all replicas that have acknowledged at least target_offset
                     acknowledged = sum(1 for ack in REPLICA_ACKS.values() if ack >= target_offset)
                     if acknowledged >= num_replicas:
                         break
