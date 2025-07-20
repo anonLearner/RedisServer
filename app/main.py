@@ -290,7 +290,7 @@ def send_command(client_conn, response, replica):
             #         resp = format_resp("OK")
             #         break
             #     time.sleep(0.1)
-            resp = format_resp("0")
+            resp = format_resp(0)
     else:
         resp = format_resp("Error: Unknown command")
 
