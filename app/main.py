@@ -299,7 +299,7 @@ def send_command(client_conn, response, replica):
             + bytes.fromhex(empty_rdb_hex)
         )
     
-    elif command == "wait":
+        elif command == "wait":
         import select
         if len(response) < 3:
             resp = format_resp("Error: WAIT command requires a number of replicas and a timeout")
@@ -356,10 +356,8 @@ def send_command(client_conn, response, replica):
                         break
 
                 resp = format_resp(acknowledged)
-        # Always send the response and return immediately after WAIT
-        if not replica:
-            print(f"[DEBUG] Sending response to client: {resp.strip()}")
-            client_conn.sendall(resp.encode("utf-8"))
+        print(f"[DEBUG] Sending response to client: {resp.strip()}")
+        client_conn.sendall(resp.encode("utf-8"))
         return
     else:
         resp = format_resp("Error: Unknown command")
