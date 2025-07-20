@@ -307,14 +307,17 @@ def send_command(client_conn, response, replica):
             num_replicas = int(response[1])
             timeout = int(response[2]) / 1000.0  # ms to seconds
 
-            # If no writes have occurred, return number of connected replicas immediately
             if GLOBAL_OFFSET == 0:
                 resp = format_resp(len(REPLICA_NODES))
             else:
                 start_time = time.time()
                 target_offset = GLOBAL_OFFSET
 
-                # Only send GETACK if there was a write
+                # Remove ACKs for previous offsets
+                for sock in list(REPLICA_ACKS.keys()):
+                    if REPLICA_ACKS[sock] < target_offset:
+                        del REPLICA_ACKS[sock]
+
                 for replica in REPLICA_NODES:
                     try:
                         msg = format_resp(["REPLCONF", "GETACK", "*"])
@@ -324,7 +327,6 @@ def send_command(client_conn, response, replica):
                         print(f"[DEBUG] Failed to send REPLCONF GETACK *: {e}")
 
                 while True:
-                    # Always use a short timeout to avoid blocking forever
                     if REPLICA_NODES:
                         rlist, _, _ = select.select(REPLICA_NODES, [], [], 0.05)
                         for sock in rlist:
@@ -348,7 +350,6 @@ def send_command(client_conn, response, replica):
                             except Exception as e:
                                 print(f"[DEBUG] Error reading from replica: {e}")
 
-                    # Count replicas that have acknowledged at least target_offset
                     acknowledged = sum(1 for ack in REPLICA_ACKS.values() if ack >= target_offset)
                     if acknowledged >= num_replicas:
                         break
