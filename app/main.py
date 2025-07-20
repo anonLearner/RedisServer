@@ -356,7 +356,6 @@ def send_command(client_conn, response, replica):
                 resp = format_resp(acknowledged)
         print(f"[DEBUG] Sending response to client: {resp.strip()}")
         client_conn.sendall(resp.encode("utf-8"))
-        return
     else:
         resp = format_resp("Error: Unknown command")
 
