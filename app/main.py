@@ -175,7 +175,15 @@ def start_replica_sync(command):
             except Exception as e:
                 print(f"Error sending command to replica: {e}")
 
-
+def send_replconf_getack():
+    for replica in REPLICA_NODES:
+        try:
+            msg = format_resp(["REPLCONF", "GETACK", "*"])
+            print(f"[DEBUG] Sending REPLCONF GETACK * to replica")
+            replica.sendall(msg.encode("utf-8"))
+        except Exception as e:
+            print(f"[DEBUG] Failed to send REPLCONF GETACK *: {e}")
+            
 def send_command(client_conn, response, replica):
     print(f"[DEBUG] send_command called with response: {response}, replica: {replica}")
     command = response[0].lower() if response and isinstance(response, list) and response[0] else None
@@ -206,6 +214,7 @@ def send_command(client_conn, response, replica):
             global GLOBAL_OFFSET
             GLOBAL_OFFSET += 1
             start_replica_sync(response)
+            send_replconf_getack()
             resp = format_resp("OK")
     elif command == "get":
         if len(response) < 2:
