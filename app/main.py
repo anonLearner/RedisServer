@@ -213,9 +213,8 @@ def send_command(client_conn, response, replica):
             data_in_memory[key] = value
             global GLOBAL_OFFSET
             resp_to_replica = format_resp(response)
-            if not replica:
-                start_replica_sync(response)
-                GLOBAL_OFFSET += len(resp_to_replica.encode("utf-8"))  # <-- fix here
+            start_replica_sync(response)
+            GLOBAL_OFFSET += len(resp_to_replica.encode("utf-8"))  # Use bytes sent, not just +1
             resp = format_resp("OK")
     elif command == "get":
         if len(response) < 2:
@@ -315,17 +314,23 @@ def send_command(client_conn, response, replica):
                 start_time = time.time()
                 target_offset = GLOBAL_OFFSET
 
-                send_replconf_getack()  # Send GETACK * to all replicas
+                # Only send GETACK if there was a write
+                for replica in REPLICA_NODES:
+                    try:
+                        msg = format_resp(["REPLCONF", "GETACK", "*"])
+                        print(f"[DEBUG] Sending REPLCONF GETACK * to replica")
+                        replica.sendall(msg.encode("utf-8"))
+                    except Exception as e:
+                        print(f"[DEBUG] Failed to send REPLCONF GETACK *: {e}")
 
                 while True:
-                    # Check for incoming data from replicas
+                    # Always use a short timeout to avoid blocking forever
                     if REPLICA_NODES:
-                        rlist, _, _ = select.select(REPLICA_NODES, [], [], 0.01)
+                        rlist, _, _ = select.select(REPLICA_NODES, [], [], 0.05)
                         for sock in rlist:
                             try:
                                 data = sock.recv(4096)
                                 if data:
-                                    # Try to parse as RESP array
                                     try:
                                         decoded = data.decode("utf-8", errors="replace")
                                         cmd, _ = parse_data(decoded)
@@ -349,7 +354,6 @@ def send_command(client_conn, response, replica):
                         break
                     if timeout > 0 and (time.time() - start_time) >= timeout:
                         break
-                    # No need for extra sleep, select already waits
 
                 resp = format_resp(acknowledged)
     else:
