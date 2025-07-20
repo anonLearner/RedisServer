@@ -212,8 +212,10 @@ def send_command(client_conn, response, replica):
                     expiration_times[key] = time.time() * 1000 + expiration_time
             data_in_memory[key] = value
             global GLOBAL_OFFSET
-            GLOBAL_OFFSET += 1
-            start_replica_sync(response)
+            resp_to_replica = format_resp(response)
+            if not replica:
+                start_replica_sync(response)
+                GLOBAL_OFFSET += len(resp_to_replica.encode("utf-8"))  # <-- fix here
             resp = format_resp("OK")
     elif command == "get":
         if len(response) < 2:
