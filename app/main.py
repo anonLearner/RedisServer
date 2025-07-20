@@ -24,6 +24,8 @@ data_in_memory = {}
 expiration_times = {}
 config = {}
 REPLICA_NODES = []
+REPLICA_ACKS = {}  # maps replica socket to last acknowledged offset
+GLOBAL_OFFSET = 0  # incremented for each write
 
 
 def parse_data(data: str):
@@ -201,6 +203,7 @@ def send_command(client_conn, response, replica):
                     expiration_time = int(response[4]) * 1000
                     expiration_times[key] = time.time() * 1000 + expiration_time
             data_in_memory[key] = value
+            GLOBAL_OFFSET += 1
             start_replica_sync(response)
             resp = format_resp("OK")
     elif command == "get":
@@ -258,6 +261,13 @@ def send_command(client_conn, response, replica):
                 resp = format_resp(replica_info)
     elif command == "replconf":
         if len(response) >= 3 and response[1].lower() == "getack" and response[2] == "*":
+            
+            try:
+                ack_offset = int(response[2])
+                REPLICA_ACKS[client_conn] = ack_offset
+            except Exception:
+                pass
+    
             resp = format_resp(["REPLCONF", "ACK", f"{config.get('offset', 0)}"])
             print(f"[DEBUG] Sending REPLCONF ACK: {resp.strip()}")
             client_conn.sendall(resp.encode("utf-8"))
@@ -283,18 +293,17 @@ def send_command(client_conn, response, replica):
             resp = format_resp("Error: WAIT command requires a number of replicas and a timeout")
         else:
             num_replicas = int(response[1])
-            timeout = int(response[2]) / 1000.0  # Convert ms to seconds
+            timeout = int(response[2]) / 1000.0  # ms to seconds
             start_time = time.time()
-            acknowledged = 0
-            while time.time() - start_time < timeout or timeout == 0:
-                # Count connected replicas (simulate ACKs)
-                acknowledged = len(REPLICA_NODES)
+            target_offset = GLOBAL_OFFSET
+            while True:
+                # Count replicas that have acknowledged at least target_offset
+                acknowledged = sum(1 for ack in REPLICA_ACKS.values() if ack >= target_offset)
                 if acknowledged >= num_replicas:
                     break
-                if timeout == 0:
-                    time.sleep(0.1)  # Block forever, but yield CPU
-                else:
-                    time.sleep(0.01)  # Sleep a bit to avoid busy-waiting
+                if timeout > 0 and (time.time() - start_time) >= timeout:
+                    break
+                time.sleep(0.01)
             resp = format_resp(acknowledged)
     else:
         resp = format_resp("Error: Unknown command")
