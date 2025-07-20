@@ -214,7 +214,6 @@ def send_command(client_conn, response, replica):
             global GLOBAL_OFFSET
             GLOBAL_OFFSET += 1
             start_replica_sync(response)
-            send_replconf_getack()
             resp = format_resp("OK")
     elif command == "get":
         if len(response) < 2:
@@ -306,6 +305,9 @@ def send_command(client_conn, response, replica):
             timeout = int(response[2]) / 1000.0  # ms to seconds
             start_time = time.time()
             target_offset = GLOBAL_OFFSET
+
+            send_replconf_getack()  # <-- Send GETACK * to all replicas
+
             while True:
                 # Count replicas that have acknowledged at least target_offset
                 acknowledged = sum(1 for ack in REPLICA_ACKS.values() if ack >= target_offset)
