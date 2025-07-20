@@ -306,46 +306,51 @@ def send_command(client_conn, response, replica):
         else:
             num_replicas = int(response[1])
             timeout = int(response[2]) / 1000.0  # ms to seconds
-            start_time = time.time()
-            target_offset = GLOBAL_OFFSET
 
-            send_replconf_getack()  # Send GETACK * to all replicas
+            # If no writes have occurred, return number of connected replicas immediately
+            if GLOBAL_OFFSET == 0:
+                resp = format_resp(len(REPLICA_NODES))
+            else:
+                start_time = time.time()
+                target_offset = GLOBAL_OFFSET
 
-            while True:
-                # Check for incoming data from replicas
-                if REPLICA_NODES:
-                    rlist, _, _ = select.select(REPLICA_NODES, [], [], 0.01)
-                    for sock in rlist:
-                        try:
-                            data = sock.recv(4096)
-                            if data:
-                                # Try to parse as RESP array
-                                try:
-                                    decoded = data.decode("utf-8", errors="replace")
-                                    cmd, _ = parse_data(decoded)
-                                    if (
-                                        isinstance(cmd, list)
-                                        and len(cmd) >= 3
-                                        and str(cmd[0]).upper() == "REPLCONF"
-                                        and str(cmd[1]).upper() == "ACK"
-                                    ):
-                                        ack_offset = int(cmd[2])
-                                        REPLICA_ACKS[sock] = ack_offset
-                                        print(f"[DEBUG] Updated REPLICA_ACKS: {REPLICA_ACKS}")
-                                except Exception as e:
-                                    print(f"[DEBUG] Failed to parse REPLCONF ACK: {e}")
-                        except Exception as e:
-                            print(f"[DEBUG] Error reading from replica: {e}")
+                send_replconf_getack()  # Send GETACK * to all replicas
 
-                # Count replicas that have acknowledged at least target_offset
-                acknowledged = sum(1 for ack in REPLICA_ACKS.values() if ack >= target_offset)
-                if acknowledged >= num_replicas:
-                    break
-                if timeout > 0 and (time.time() - start_time) >= timeout:
-                    break
-                # No need for extra sleep, select already waits
+                while True:
+                    # Check for incoming data from replicas
+                    if REPLICA_NODES:
+                        rlist, _, _ = select.select(REPLICA_NODES, [], [], 0.01)
+                        for sock in rlist:
+                            try:
+                                data = sock.recv(4096)
+                                if data:
+                                    # Try to parse as RESP array
+                                    try:
+                                        decoded = data.decode("utf-8", errors="replace")
+                                        cmd, _ = parse_data(decoded)
+                                        if (
+                                            isinstance(cmd, list)
+                                            and len(cmd) >= 3
+                                            and str(cmd[0]).upper() == "REPLCONF"
+                                            and str(cmd[1]).upper() == "ACK"
+                                        ):
+                                            ack_offset = int(cmd[2])
+                                            REPLICA_ACKS[sock] = ack_offset
+                                            print(f"[DEBUG] Updated REPLICA_ACKS: {REPLICA_ACKS}")
+                                    except Exception as e:
+                                        print(f"[DEBUG] Failed to parse REPLCONF ACK: {e}")
+                            except Exception as e:
+                                print(f"[DEBUG] Error reading from replica: {e}")
 
-            resp = format_resp(acknowledged)
+                    # Count replicas that have acknowledged at least target_offset
+                    acknowledged = sum(1 for ack in REPLICA_ACKS.values() if ack >= target_offset)
+                    if acknowledged >= num_replicas:
+                        break
+                    if timeout > 0 and (time.time() - start_time) >= timeout:
+                        break
+                    # No need for extra sleep, select already waits
+
+                resp = format_resp(acknowledged)
     else:
         resp = format_resp("Error: Unknown command")
 
