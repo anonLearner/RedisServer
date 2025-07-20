@@ -298,7 +298,6 @@ def send_command(client_conn, response, replica):
             + bytes.fromhex(empty_rdb_hex)
         )
     
-
     elif command == "wait":
         import select
         if len(response) < 3:
