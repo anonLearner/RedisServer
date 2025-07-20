@@ -203,6 +203,7 @@ def send_command(client_conn, response, replica):
                     expiration_time = int(response[4]) * 1000
                     expiration_times[key] = time.time() * 1000 + expiration_time
             data_in_memory[key] = value
+            global GLOBAL_OFFSET
             GLOBAL_OFFSET += 1
             start_replica_sync(response)
             resp = format_resp("OK")
