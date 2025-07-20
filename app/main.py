@@ -282,15 +282,20 @@ def send_command(client_conn, response, replica):
         if len(response) < 3:
             resp = format_resp("Error: WAIT command requires a number of replicas and a timeout")
         else:
-            # num_replicas = int(response[1])
-            # timeout = int(response[2])
-            # start_time = time.time()
-            # while time.time() - start_time < timeout:
-            #     if len(REPLICA_NODES) >= num_replicas:
-            #         resp = format_resp("OK")
-            #         break
-            #     time.sleep(0.1)
-            resp = format_resp(0)
+            num_replicas = int(response[1])
+            timeout = int(response[2]) / 1000.0  # Convert ms to seconds
+            start_time = time.time()
+            acknowledged = 0
+            while time.time() - start_time < timeout or timeout == 0:
+                # Count connected replicas (simulate ACKs)
+                acknowledged = len(REPLICA_NODES)
+                if acknowledged >= num_replicas:
+                    break
+                if timeout == 0:
+                    time.sleep(0.1)  # Block forever, but yield CPU
+                else:
+                    time.sleep(0.01)  # Sleep a bit to avoid busy-waiting
+            resp = format_resp(acknowledged)
     else:
         resp = format_resp("Error: Unknown command")
 
