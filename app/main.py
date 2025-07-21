@@ -279,7 +279,7 @@ def send_command(client_conn, response, replica):
                 print(f"[DEBUG] Updated REPLICA_ACKS (from send_command): {REPLICA_ACKS}")
             except Exception as e:
                 print(f"[DEBUG] Failed to parse ACK offset: {e}")
-            resp = format_resp("OK")
+            resp = format_resp("OK in if")
             if not replica:
                 client_conn.sendall(resp.encode("utf-8"))
             return
@@ -290,7 +290,7 @@ def send_command(client_conn, response, replica):
             client_conn.sendall(resp.encode("utf-8"))
             return
         else:
-            resp = format_resp("OK")
+            resp = format_resp("OK in else")
             if not replica:
                 client_conn.sendall(resp.encode("utf-8"))
             return
