@@ -292,7 +292,7 @@ def send_command(client_conn, response, replica):
             return
         # Handle REPLCONF GETACK * (send ACK back to replica)
         elif len(response) >= 3 and response[1].lower() == "getack" and response[2] == "*":
-            resp = format_resp(["REPLCONF", "ACK", f"{GLOBAL_OFFSET}"])
+            resp = format_resp(["REPLCONF", "ACK", f"{config["offset"]}"])
             print(f"[DEBUG] Sending REPLCONF ACK: {resp.strip()}")
             client_conn.sendall(resp.encode("utf-8"))
             return
