@@ -212,7 +212,8 @@ def send_command(client_conn, response, replica):
                     expiration_times[key] = time.time() * 1000 + expiration_time
             data_in_memory[key] = value
             global GLOBAL_OFFSET
-            resp_to_replica = format_resp(response)
+            if not replica:
+                resp_to_replica = format_resp(response)
             start_replica_sync(response)
             GLOBAL_OFFSET += len(resp_to_replica.encode("utf-8"))  # Use bytes sent, not just +1
             resp = format_resp("OK")
