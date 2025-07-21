@@ -214,8 +214,8 @@ def send_command(client_conn, response, replica):
             global GLOBAL_OFFSET
             if not replica:
                 resp_to_replica = format_resp(response)
-            start_replica_sync(response)
-            GLOBAL_OFFSET += len(resp_to_replica.encode("utf-8"))  # Use bytes sent, not just +1
+                start_replica_sync(response)
+                GLOBAL_OFFSET += len(resp_to_replica.encode("utf-8"))
             resp = format_resp("OK")
     elif command == "get":
         if len(response) < 2:
