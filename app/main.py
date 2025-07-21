@@ -271,17 +271,24 @@ def send_command(client_conn, response, replica):
                 replica_info += f"\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\nmaster_repl_offset:0"
                 resp = format_resp(replica_info)
     elif command == "replconf":
+        # Only reply OK for handshake commands
+        if len(response) >= 3 and response[1].lower() == "listening-port":
+            resp = format_resp("OK")
+            client_conn.sendall(resp.encode("utf-8"))
+            return
+        elif len(response) >= 3 and response[1].lower() == "capa":
+            resp = format_resp("OK")
+            client_conn.sendall(resp.encode("utf-8"))
+            return
         # Handle REPLCONF ACK <offset> from replicas
-        if len(response) >= 3 and response[1].lower() == "ack":
+        elif len(response) >= 3 and response[1].lower() == "ack":
             try:
                 ack_offset = int(response[2])
                 REPLICA_ACKS[client_conn] = ack_offset
                 print(f"[DEBUG] Updated REPLICA_ACKS (from send_command): {REPLICA_ACKS}")
             except Exception as e:
                 print(f"[DEBUG] Failed to parse ACK offset: {e}")
-            resp = format_resp("OK in if")
-            if not replica:
-                client_conn.sendall(resp.encode("utf-8"))
+            # No response needed for ACK
             return
         # Handle REPLCONF GETACK * (send ACK back to replica)
         elif len(response) >= 3 and response[1].lower() == "getack" and response[2] == "*":
@@ -290,9 +297,8 @@ def send_command(client_conn, response, replica):
             client_conn.sendall(resp.encode("utf-8"))
             return
         else:
-            resp = format_resp("OK in else")
-            if not replica:
-                client_conn.sendall(resp.encode("utf-8"))
+            # Unknown REPLCONF, ignore or log
+            print(f"[DEBUG] Unknown REPLCONF subcommand: {response}")
             return
     elif command == "psync":
         REPLICA_NODES.append(client_conn)
