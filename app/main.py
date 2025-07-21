@@ -270,16 +270,21 @@ def send_command(client_conn, response, replica):
                 replica_info += f"\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\nmaster_repl_offset:0"
                 resp = format_resp(replica_info)
     elif command == "replconf":
-        if len(response) >= 3 and response[1].lower() == "getack" and response[2] == "*":
-            
+        # Handle REPLCONF ACK <offset> from replicas
+        if len(response) >= 3 and response[1].lower() == "ack":
             try:
                 ack_offset = int(response[2])
                 REPLICA_ACKS[client_conn] = ack_offset
                 print(f"[DEBUG] Updated REPLICA_ACKS (from send_command): {REPLICA_ACKS}")
-            except Exception:
-                pass
-    
-            resp = format_resp(["REPLCONF", "ACK", f"{config.get('offset', 0)}"])
+            except Exception as e:
+                print(f"[DEBUG] Failed to parse ACK offset: {e}")
+            resp = format_resp("OK")
+            if not replica:
+                client_conn.sendall(resp.encode("utf-8"))
+            return
+        # Handle REPLCONF GETACK * (send ACK back to replica)
+        elif len(response) >= 3 and response[1].lower() == "getack" and response[2] == "*":
+            resp = format_resp(["REPLCONF", "ACK", f"{GLOBAL_OFFSET}"])
             print(f"[DEBUG] Sending REPLCONF ACK: {resp.strip()}")
             client_conn.sendall(resp.encode("utf-8"))
             return
